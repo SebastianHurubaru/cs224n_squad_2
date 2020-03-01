@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from util import masked_softmax
 
@@ -38,6 +39,63 @@ class Embedding(nn.Module):
 
         return emb
 
+
+class EmbeddingExtra(nn.Module):
+    """Embedding layer used by BiDAF, without the character-level component.
+
+    Word-level embeddings are further refined using a 2-layer Highway Encoder
+    (see `HighwayEncoder` class for details).
+
+    Args:
+        word_vectors (torch.Tensor): Pre-trained word vectors.
+        hidden_size (int): Size of hidden activations.
+        drop_prob (float): Probability of zero-ing out activations
+    """
+    def __init__(self, args, word_vectors):
+
+        super(EmbeddingExtra, self).__init__()
+        self.drop_prob = args.drop_prob if hasattr(args, 'drop_prob') else 0.
+        self.embed = nn.Embedding.from_pretrained(word_vectors)
+        input_size = args.glove_dim
+
+        self.cove = MTLSTM(args)
+        input_size += args.cove_dim
+
+        # POS embeddings
+        self.pos_embed = nn.Embedding(args.pos_size, args.pos_dim)
+        input_size += args.pos_dim
+
+        # NER embeddings
+        self.ner_embed = nn.Embedding(args.ner_size, args.ner_dim)
+        input_size += args.ner_dim
+
+        self.proj = nn.Linear(input_size, args.hidden_size, bias=False)
+        self.hwy = HighwayEncoder(2, args.hidden_size)
+
+    def forward(self, x, x_mask, lengths, x_pos, x_ner):
+
+        input_list = []
+
+        glove_emb = self.embed(x)   # (batch_size, seq_len, embed_size)
+        glove_emb = F.dropout(glove_emb, self.drop_prob, self.training)
+        input_list.append(glove_emb)
+
+        _, cove_emb = self.cove(self.embed(x), lengths)
+        cove_emb = F.dropout(cove_emb, self.drop_prob, self.training)
+        input_list.append(cove_emb)
+
+        pos_emb = self.pos_embed(x_pos)
+        input_list.append(pos_emb)
+
+        ner_emb = self.ner_embed(x_ner)
+        input_list.append(ner_emb)
+
+        inputs = torch.cat(input_list, 2)
+
+        emb = self.proj(inputs)  # (batch_size, seq_len, hidden_size)
+        emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
+
+        return emb
 
 class HighwayEncoder(nn.Module):
     """Encode an input sequence using a highway network.
@@ -84,15 +142,17 @@ class RNNEncoder(nn.Module):
                  input_size,
                  hidden_size,
                  num_layers,
-                 drop_prob=0.):
+                 drop_prob=0.,
+                 extra_size=0):
         super(RNNEncoder, self).__init__()
         self.drop_prob = drop_prob
-        self.rnn = nn.LSTM(input_size, hidden_size, num_layers,
+        self.rnn = nn.LSTM(input_size+extra_size, hidden_size, num_layers,
                            batch_first=True,
                            bidirectional=True,
                            dropout=drop_prob if num_layers > 1 else 0.)
 
     def forward(self, x, lengths):
+
         # Save original padded length for use by pad_packed_sequence
         orig_len = x.size(1)
 
@@ -102,6 +162,7 @@ class RNNEncoder(nn.Module):
         x = pack_padded_sequence(x, lengths, batch_first=True)
 
         # Apply RNN
+        # TODO: see whether on one GPU the warning is gone
         self.rnn.flatten_parameters()
         x, _ = self.rnn(x)  # (batch_size, seq_len, 2 * hidden_size)
 
@@ -221,3 +282,49 @@ class BiDAFOutput(nn.Module):
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
 
         return log_p1, log_p2
+
+class MTLSTM(nn.Module):
+
+    def __init__(self, args):
+        """Initialize an Multi-Timescale LSTM
+
+        Arguments:
+
+        """
+        super(MTLSTM, self).__init__()
+
+        # state_dict = torch.load(opt['MTLSTM_path'])
+        self.rnn1 = nn.LSTM(args.glove_dim, args.glove_dim, num_layers=1, bidirectional=True)
+        self.rnn2 = nn.LSTM(args.cove_dim, args.glove_dim, num_layers=1, bidirectional=True)
+
+        state_dict = torch.load(args.cove_emb_file)
+        state_dict1 = dict([(name, param) for name, param in state_dict.items() if '0' in name])
+        state_dict2 = dict([(name.replace('1', '0'), param) for name, param in state_dict.items() if '1' in name])
+        self.rnn1.load_state_dict(state_dict1)
+        self.rnn2.load_state_dict(state_dict2)
+
+        self.output_size = args.cove_dim
+
+    def forward(self, x, lengths):
+
+        # Sort by length and pack sequence for RNN
+        lengths, sort_idx = lengths.sort(0, descending=True)
+        x = x[sort_idx]  # (batch_size, seq_len, input_size)
+        x = pack_padded_sequence(x, lengths, batch_first=True)
+
+        # Apply RNNs
+        self.rnn1.flatten_parameters()
+        output1, _ = self.rnn1(x)
+
+        self.rnn2.flatten_parameters()
+        output2, _ = self.rnn2(output1)
+
+        output1, _ = pad_packed_sequence(output1, batch_first=True)
+        output2, _ = pad_packed_sequence(output2, batch_first=True)
+
+        # Unpack and reverse sort
+        _, unsort_idx = sort_idx.sort(0)
+        output1 = output1[unsort_idx]
+        output2 = output2[unsort_idx]
+
+        return output1, output2
