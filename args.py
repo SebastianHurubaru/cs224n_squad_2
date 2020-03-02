@@ -121,7 +121,7 @@ def get_train_args():
                         help='Number of epochs for which to train. Negative means forever.')
     parser.add_argument('--drop_prob',
                         type=float,
-                        default=0.2,
+                        default=0.3,
                         help='Probability of zeroing an activation in dropout layers.')
     parser.add_argument('--metric_name',
                         type=str,
@@ -269,6 +269,10 @@ def add_train_test_args(parser):
     parser.add_argument('--cove_dim',
                         type=int,
                         default=600,
+                        help='Size of CoVe word vectors to use')
+    parser.add_argument('--concepts_size',
+                        type=int,
+                        default=125,
                         help='Size of CoVe word vectors to use')
     parser.add_argument('--num_features',
                         type=int,

@@ -189,8 +189,7 @@ def process_file(filename, data_type, word_counter, char_counter):
                                                  "spans": spans,
                                                  "answers": answer_texts,
                                                  "uuid": qa["id"]}
-            # TODO: remove
-            # break
+
         print(f"{len(examples)} questions in total")
 
 

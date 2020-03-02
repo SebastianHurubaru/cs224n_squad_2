@@ -162,7 +162,6 @@ class RNNEncoder(nn.Module):
         x = pack_padded_sequence(x, lengths, batch_first=True)
 
         # Apply RNN
-        # TODO: see whether on one GPU the warning is gone
         self.rnn.flatten_parameters()
         x, _ = self.rnn(x)  # (batch_size, seq_len, 2 * hidden_size)
 
@@ -283,15 +282,51 @@ class BiDAFOutput(nn.Module):
 
         return log_p1, log_p2
 
+
+class FNRNNEncoder(nn.Module):
+
+    def __init__(self, args, input_size, hidden_size, num_layers, rnn_type=nn.LSTM):
+        super(FNRNNEncoder, self).__init__()
+        self.num_layers = num_layers
+        self.rnns = nn.ModuleList()
+        for i in range(num_layers):
+            input_size_ = (input_size + 2 * hidden_size * i)
+            self.rnns.append(rnn_type(input_size_, hidden_size, num_layers=1, bidirectional=True))
+
+        self.args = args
+
+    def forward(self, x, x_mask):
+        # Transpose batch and sequence dims
+        x = x.transpose(0, 1)
+
+        # Encode all layers
+        hiddens = [x]
+        for i in range(self.num_layers):
+            rnn_input = torch.cat(hiddens, 2)
+
+            # Apply dropout to input
+            if self.args.drop_prob > 0:
+                rnn_input = F.dropout(rnn_input, self.args.drop_prob, self.training)
+
+            # Forward
+            rnn_output = self.rnns[i](rnn_input)[0]
+            hiddens.append(rnn_output)
+
+        # Transpose back
+        hiddens = [h.transpose(0, 1) for h in hiddens]
+        return hiddens[1:]
+
 class MTLSTM(nn.Module):
 
-    def __init__(self, args):
+    def __init__(self, args, word_vectors):
         """Initialize an Multi-Timescale LSTM
 
         Arguments:
 
         """
         super(MTLSTM, self).__init__()
+
+        self.embed = nn.Embedding.from_pretrained(word_vectors)
 
         # state_dict = torch.load(opt['MTLSTM_path'])
         self.rnn1 = nn.LSTM(args.glove_dim, args.glove_dim, num_layers=1, bidirectional=True)
@@ -303,9 +338,18 @@ class MTLSTM(nn.Module):
         self.rnn1.load_state_dict(state_dict1)
         self.rnn2.load_state_dict(state_dict2)
 
+        for p in self.embed.parameters():
+            p.requires_grad = False
+        for p in self.rnn1.parameters():
+            p.requires_grad = False
+        for p in self.rnn2.parameters():
+            p.requires_grad = False
+
         self.output_size = args.cove_dim
 
     def forward(self, x, lengths):
+
+        x = self.embed(x)
 
         # Sort by length and pack sequence for RNN
         lengths, sort_idx = lengths.sort(0, descending=True)
@@ -328,3 +372,58 @@ class MTLSTM(nn.Module):
         output2 = output2[unsort_idx]
 
         return output1, output2
+
+
+# Attention layer
+class FullAttention(nn.Module):
+    def __init__(self, args, full_size, hidden_size, num_level):
+
+        super(FullAttention, self).__init__()
+        assert(hidden_size % num_level == 0)
+        self.full_size = full_size
+        self.hidden_size = hidden_size
+        self.attsize_per_lvl = hidden_size // num_level
+        self.num_level = num_level
+        self.linear = nn.Linear(full_size, hidden_size, bias=False)
+        self.linear_final = nn.Parameter(torch.ones(1, hidden_size), requires_grad = True)
+        self.output_size = hidden_size
+
+        self.args = args
+
+        print("Full Attention: (atten. {} -> {}, take {}) x {}".format(self.full_size, self.attsize_per_lvl, hidden_size // num_level, self.num_level))
+
+    def forward(self, x1_att, x2_att, x2, x2_mask):
+        """
+        x1_att: batch * len1 * full_size
+        x2_att: batch * len2 * full_size
+        x2: batch * len2 * hidden_size
+        x2_mask: batch * len2
+        """
+
+        len1 = x1_att.size(1)
+        len2 = x2_att.size(1)
+
+        x1_att = F.dropout(x1_att, p=self.args.drop_prob, training=self.training)
+        x2_att = F.dropout(x2_att, p=self.args.drop_prob, training=self.training)
+
+        x1_key = F.relu(self.linear(x1_att.view(-1, self.full_size)))
+        x2_key = F.relu(self.linear(x2_att.view(-1, self.full_size)))
+        final_v = self.linear_final.expand_as(x2_key)
+        x2_key = final_v * x2_key
+
+        x1_rep = x1_key.view(-1, len1, self.num_level, self.attsize_per_lvl).transpose(1, 2).contiguous().view(-1, len1, self.attsize_per_lvl)
+        x2_rep = x2_key.view(-1, len2, self.num_level, self.attsize_per_lvl).transpose(1, 2).contiguous().view(-1, len2, self.attsize_per_lvl)
+
+        scores = x1_rep.bmm(x2_rep.transpose(1, 2)).view(-1, self.num_level, len1, len2) # batch * num_level * len1 * len2
+
+        x2_mask = x2_mask.unsqueeze(1).unsqueeze(2).expand_as(scores)
+        scores.data.masked_fill_(x2_mask.data, -float('inf'))
+
+        alpha_flat = F.softmax(scores.view(-1, len2))
+        alpha = alpha_flat.view(-1, len1, len2)
+
+        size_per_level = self.hidden_size // self.num_level
+        atten_seq = alpha.bmm(x2.contiguous().view(-1, len2, self.num_level, size_per_level).transpose(1, 2).contiguous().view(-1, len2, size_per_level))
+
+        return atten_seq.view(-1, self.num_level, len1, size_per_level).transpose(1, 2).contiguous().view(-1, len1, self.hidden_size)
+

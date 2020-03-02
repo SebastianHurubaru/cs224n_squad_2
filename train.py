@@ -57,7 +57,6 @@ def main(args):
         model = FusionNet(word_vectors=word_vectors,
                           args=args)
 
-    # TODO: restore this once changes are good
     model = nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')
