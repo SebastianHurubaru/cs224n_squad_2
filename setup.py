@@ -17,6 +17,7 @@ import spacy
 import ujson as json
 import urllib.request
 
+
 from args import get_setup_args
 from codecs import open
 from collections import Counter
@@ -24,6 +25,9 @@ from subprocess import run
 from tqdm import tqdm
 from zipfile import ZipFile
 
+
+# define here the OntoNotes 5 named entities. Surpised there is no variable in spacy that gives us the list ...
+entity_types = ['PERSON', 'NORP', 'FAC', 'ORG', 'GPE', 'LOC', 'PRODUCT', 'EVENT', 'WORK_OF_ART', 'LAW', 'LANGUAGE', 'DATE', 'TIME', 'PERCENT', 'MONEY', 'QUANTITY', 'ORDINAL', 'CARDINAL']
 
 def download_url(url, output_path, show_progress=True):
     class DownloadProgressBar(tqdm):
@@ -52,6 +56,7 @@ def download(args):
     downloads = [
         # Can add other downloads here (e.g., other word vectors)
         ('GloVe word vectors', args.glove_url),
+        ('CoVe word vectors', args.cove_url)
     ]
 
     for name, url in downloads:
@@ -74,6 +79,43 @@ def word_tokenize(sent):
     doc = nlp(sent)
     return [token.text for token in doc]
 
+
+def context_feat_generator(sent):
+
+    features = {}
+
+    doc = nlp(sent)
+
+    # Get POS tags
+    features['pos'] = token_2idx([token.tag_ for token in doc], [''] + list(nlp.tagger.labels))
+
+    # Get NER tags
+
+    features['ner'] = token_2idx([token.ent_type_ for token in doc], [''] + list(entity_types))
+
+    return features
+
+def context_ques_feat_generator(context, ques):
+
+    docC = nlp(context)
+    docQ = nlp(ques)
+
+
+    question_word = {w.text for w in docQ}
+    question_lower = {w.text.lower() for w in docQ}
+    question_lemma = {w.lemma_ if w.lemma_ != '-PRON-' else w.text.lower() for w in docQ}
+
+    match_origin = [w.text in question_word for w in docC]
+    match_lower = [w.text.lower() in question_lower for w in docC]
+    match_lemma = [(w.lemma_ if w.lemma_ != '-PRON-' else w.text.lower()) in question_lemma for w in docC]
+
+    return list(zip(match_origin, match_lower, match_lemma))
+
+def token_2idx(doc, vocab, unk_id=None):
+
+    w2id = {w: i for i, w in enumerate(vocab)}
+    ids = [w2id[w] if w in w2id else unk_id for w in doc]
+    return ids
 
 def convert_idx(text, tokens):
     current = 0
@@ -101,6 +143,7 @@ def process_file(filename, data_type, word_counter, char_counter):
                     "''", '" ').replace("``", '" ')
                 context_tokens = word_tokenize(context)
                 context_chars = [list(token) for token in context_tokens]
+                context_extra_features = context_feat_generator(context)
                 spans = convert_idx(context, context_tokens)
                 for token in context_tokens:
                     word_counter[token] += len(para["qas"])
@@ -112,6 +155,7 @@ def process_file(filename, data_type, word_counter, char_counter):
                         "''", '" ').replace("``", '" ')
                     ques_tokens = word_tokenize(ques)
                     ques_chars = [list(token) for token in ques_tokens]
+                    context_question_extra_features = context_ques_feat_generator(context, ques)
                     for token in ques_tokens:
                         word_counter[token] += 1
                         for char in token:
@@ -132,8 +176,10 @@ def process_file(filename, data_type, word_counter, char_counter):
                         y2s.append(y2)
                     example = {"context_tokens": context_tokens,
                                "context_chars": context_chars,
+                               "context_extra_features": context_extra_features,
                                "ques_tokens": ques_tokens,
                                "ques_chars": ques_chars,
+                               "context_question_extra_features": context_question_extra_features,
                                "y1s": y1s,
                                "y2s": y2s,
                                "id": total}
@@ -143,7 +189,10 @@ def process_file(filename, data_type, word_counter, char_counter):
                                                  "spans": spans,
                                                  "answers": answer_texts,
                                                  "uuid": qa["id"]}
+
         print(f"{len(examples)} questions in total")
+
+
     return examples, eval_examples
 
 
@@ -266,8 +315,12 @@ def build_features(args, examples, data_type, out_file, word2idx_dict, char2idx_
     meta = {}
     context_idxs = []
     context_char_idxs = []
+    context_pos_tags = []
+    context_ner_tags = []
+    context_freqs = []
     ques_idxs = []
     ques_char_idxs = []
+    context_ques_features = []
     y1s = []
     y2s = []
     ids = []
@@ -292,12 +345,31 @@ def build_features(args, examples, data_type, out_file, word2idx_dict, char2idx_
 
         context_idx = np.zeros([para_limit], dtype=np.int32)
         context_char_idx = np.zeros([para_limit, char_limit], dtype=np.int32)
+        context_pos_tag = np.zeros([para_limit], dtype=np.int32)
+        context_ner_tag = np.full([para_limit], -1, dtype=np.int32)
+        context_freq = np.zeros([para_limit], dtype=np.float32)
         ques_idx = np.zeros([ques_limit], dtype=np.int32)
         ques_char_idx = np.zeros([ques_limit, char_limit], dtype=np.int32)
+        context_ques_feature = np.full([para_limit, args.num_features], -1, dtype=np.int32)
+
+        # Get the POS tags
+        for i, token_pos in enumerate(example["context_extra_features"]['pos']):
+            context_pos_tag[i] = token_pos
+        context_pos_tags.append(context_pos_tag)
+
+        # Get the NER tags
+        for i, token_ner in enumerate(example["context_extra_features"]['ner']):
+            context_ner_tag[i] = token_ner
+        context_ner_tags.append(context_ner_tag)
+
+        context_words_counter = Counter(w.lower() for w in example["context_tokens"])
+        total_words = sum(context_words_counter.values())
 
         for i, token in enumerate(example["context_tokens"]):
             context_idx[i] = _get_word(token)
+            context_freq[i] = context_words_counter[token.lower()] / total_words
         context_idxs.append(context_idx)
+        context_freqs.append(context_freq)
 
         for i, token in enumerate(example["ques_tokens"]):
             ques_idx[i] = _get_word(token)
@@ -317,6 +389,12 @@ def build_features(args, examples, data_type, out_file, word2idx_dict, char2idx_
                 ques_char_idx[i, j] = _get_char(char)
         ques_char_idxs.append(ques_char_idx)
 
+        # Get the extra context-question features
+        for i, features in enumerate(example["context_question_extra_features"]):
+            for j, feature in enumerate(features):
+                context_ques_feature[i, j] = feature
+        context_ques_features.append(context_ques_feature)
+
         if is_answerable(example):
             start, end = example["y1s"][-1], example["y2s"][-1]
         else:
@@ -329,8 +407,12 @@ def build_features(args, examples, data_type, out_file, word2idx_dict, char2idx_
     np.savez(out_file,
              context_idxs=np.array(context_idxs),
              context_char_idxs=np.array(context_char_idxs),
+             context_pos_tags=np.array(context_pos_tags),
+             context_ner_tags=np.array(context_ner_tags),
+             context_freqs=np.array(context_freqs),
              ques_idxs=np.array(ques_idxs),
              ques_char_idxs=np.array(ques_char_idxs),
+             context_ques_features=context_ques_features,
              y1s=np.array(y1s),
              y2s=np.array(y2s),
              ids=np.array(ids))
@@ -383,7 +465,8 @@ if __name__ == '__main__':
     download(args_)
 
     # Import spacy language model
-    nlp = spacy.blank("en")
+    nlp = spacy.load('en', parser=False)
+
 
     # Preprocess dataset
     args_.train_file = url_to_data_path(args_.train_url)

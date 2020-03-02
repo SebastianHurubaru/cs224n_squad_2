@@ -17,7 +17,7 @@ import util
 from args import get_train_args
 from collections import OrderedDict
 from json import dumps
-from models import BiDAF
+from models import BiDAF, BiDAFExtra, FusionNet
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from ujson import load as json_load
@@ -46,9 +46,17 @@ def main(args):
 
     # Get model
     log.info('Building model...')
-    model = BiDAF(word_vectors=word_vectors,
-                  hidden_size=args.hidden_size,
-                  drop_prob=args.drop_prob)
+    if args.model == 'bidaf':
+        model = BiDAF(word_vectors=word_vectors,
+                      hidden_size=args.hidden_size,
+                      drop_prob=args.drop_prob)
+    elif args.model == 'bidafextra':
+        model = BiDAFExtra(word_vectors=word_vectors,
+                           args=args)
+    elif args.model == 'fusionnet':
+        model = FusionNet(word_vectors=word_vectors,
+                          args=args)
+
     model = nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')
@@ -95,7 +103,7 @@ def main(args):
         log.info(f'Starting epoch {epoch}...')
         with torch.enable_grad(), \
                 tqdm(total=len(train_loader.dataset)) as progress_bar:
-            for cw_idxs, cc_idxs, qw_idxs, qc_idxs, y1, y2, ids in train_loader:
+            for cw_idxs, cc_idxs, qw_idxs, qc_idxs, cw_pos, cw_ner, cw_freq, cqw_extra, y1, y2, ids in train_loader:
                 # Setup for forward
                 cw_idxs = cw_idxs.to(device)
                 qw_idxs = qw_idxs.to(device)
@@ -103,7 +111,10 @@ def main(args):
                 optimizer.zero_grad()
 
                 # Forward
-                log_p1, log_p2 = model(cw_idxs, qw_idxs)
+                if args.model == 'bidaf':
+                    log_p1, log_p2 = model(cw_idxs, qw_idxs)
+                else:
+                    log_p1, log_p2 = model(cw_idxs, qw_idxs, cw_pos, cw_ner, cw_freq, cqw_extra)
                 y1, y2 = y1.to(device), y2.to(device)
                 loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
                 loss_val = loss.item()
@@ -132,7 +143,7 @@ def main(args):
                     # Evaluate and save checkpoint
                     log.info(f'Evaluating at step {step}...')
                     ema.assign(model)
-                    results, pred_dict = evaluate(model, dev_loader, device,
+                    results, pred_dict = evaluate(args, model, dev_loader, device,
                                                   args.dev_eval_file,
                                                   args.max_ans_len,
                                                   args.use_squad_v2)
@@ -155,7 +166,8 @@ def main(args):
                                    num_visuals=args.num_visuals)
 
 
-def evaluate(model, data_loader, device, eval_file, max_len, use_squad_v2):
+
+def evaluate(args, model, data_loader, device, eval_file, max_len, use_squad_v2):
     nll_meter = util.AverageMeter()
 
     model.eval()
@@ -164,14 +176,20 @@ def evaluate(model, data_loader, device, eval_file, max_len, use_squad_v2):
         gold_dict = json_load(fh)
     with torch.no_grad(), \
             tqdm(total=len(data_loader.dataset)) as progress_bar:
-        for cw_idxs, cc_idxs, qw_idxs, qc_idxs, y1, y2, ids in data_loader:
+        for cw_idxs, cc_idxs, qw_idxs, qc_idxs, cw_pos, cw_ner, cw_freq, cqw_extra, y1, y2, ids in data_loader:
+
             # Setup for forward
             cw_idxs = cw_idxs.to(device)
             qw_idxs = qw_idxs.to(device)
             batch_size = cw_idxs.size(0)
 
             # Forward
-            log_p1, log_p2 = model(cw_idxs, qw_idxs)
+            # Forward
+            if args.model == 'bidaf':
+                log_p1, log_p2 = model(cw_idxs, qw_idxs)
+            else:
+                log_p1, log_p2 = model(cw_idxs, qw_idxs, cw_pos, cw_ner, cw_freq, cqw_extra)
+
             y1, y2 = y1.to(device), y2.to(device)
             loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
             nll_meter.update(loss.item(), batch_size)

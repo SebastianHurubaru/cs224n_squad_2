@@ -25,6 +25,12 @@ def get_setup_args():
     parser.add_argument('--glove_url',
                         type=str,
                         default='http://nlp.stanford.edu/data/glove.840B.300d.zip')
+    parser.add_argument('--cove_url',
+                        type=str,
+                        default='https://s3.amazonaws.com/research.metamind.io/cove/wmtlstm-b142a7f2.pth')
+    parser.add_argument('--train_meta_file',
+                        type=str,
+                        default='./data/train_meta.json')
     parser.add_argument('--dev_meta_file',
                         type=str,
                         default='./data/dev_meta.json')
@@ -68,6 +74,10 @@ def get_setup_args():
                         type=int,
                         default=2196017,
                         help='Number of GloVe vectors')
+    parser.add_argument('--num_features',
+                        type=int,
+                        default=3,
+                        help='Size of extra features')
     parser.add_argument('--ans_limit',
                         type=int,
                         default=30,
@@ -111,7 +121,7 @@ def get_train_args():
                         help='Number of epochs for which to train. Negative means forever.')
     parser.add_argument('--drop_prob',
                         type=float,
-                        default=0.2,
+                        default=0.3,
                         help='Probability of zeroing an activation in dropout layers.')
     parser.add_argument('--metric_name',
                         type=str,
@@ -191,6 +201,9 @@ def add_common_args(parser):
     parser.add_argument('--char_emb_file',
                         type=str,
                         default='./data/char_emb.json')
+    parser.add_argument('--cove_emb_file',
+                        type=str,
+                        default='./data/wmtlstm-b142a7f2.pth')
     parser.add_argument('--train_eval_file',
                         type=str,
                         default='./data/train_eval.json')
@@ -200,6 +213,10 @@ def add_common_args(parser):
     parser.add_argument('--test_eval_file',
                         type=str,
                         default='./data/test_eval.json')
+    parser.add_argument('--model',
+                        type=str,
+                        choices=['bidaf', 'bidafextra', 'fusionnet'],
+                        default='bidaf')
 
 
 def add_train_test_args(parser):
@@ -234,6 +251,49 @@ def add_train_test_args(parser):
                         type=int,
                         default=100,
                         help='Number of features in encoder hidden layers.')
+    parser.add_argument('--number_of_class',
+                        type=int,
+                        default=3)
+    parser.add_argument('--enc_rnn_layers',
+                        type=int,
+                        default=2,
+                        help="Encoding RNN layers")
+    parser.add_argument('--inf_rnn_layers',
+                        type=int,
+                        default=2,
+                        help="Inference RNN layers")
+    parser.add_argument('--glove_dim',
+                        type=int,
+                        default=300,
+                        help='Size of GloVe word vectors to use')
+    parser.add_argument('--cove_dim',
+                        type=int,
+                        default=600,
+                        help='Size of CoVe word vectors to use')
+    parser.add_argument('--concepts_size',
+                        type=int,
+                        default=125,
+                        help='Size of CoVe word vectors to use')
+    parser.add_argument('--num_features',
+                        type=int,
+                        default=3,
+                        help='Size of extra features')
+    parser.add_argument('--pos_size',
+                        type=int,
+                        default=56,
+                        help='How many kinds of POS tags.')
+    parser.add_argument('--pos_dim',
+                        type=int,
+                        default=12,
+                        help='The embedding dimension for POS tags.')
+    parser.add_argument('--ner_size',
+                        type=int,
+                        default=19,
+                        help='How many kinds of named entity tags.')
+    parser.add_argument('--ner_dim',
+                        type=int,
+                        default=8,
+                        help='The embedding dimension for named entity tags.')
     parser.add_argument('--num_visuals',
                         type=int,
                         default=10,
