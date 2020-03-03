@@ -427,3 +427,36 @@ class FullAttention(nn.Module):
 
         return atten_seq.view(-1, self.num_level, len1, size_per_level).transpose(1, 2).contiguous().view(-1, len1, self.hidden_size)
 
+# For summarizing a set of vectors into a single vector
+class LinearSelfAttn(nn.Module):
+
+    """Self attention over a sequence:
+    * o_i = softmax(Wx_i) for x_i in X.
+    """
+    def __init__(self, args, input_size, hidden_size=1):
+        super(LinearSelfAttn, self).__init__()
+
+        self.args = args
+
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+
+        self.linear = nn.Linear(input_size, 1, bias=False)
+
+    def forward(self, x, x_mask):
+        """
+        x = batch * len * hdim
+        x_mask = batch * len
+        """
+
+        len = x.size(1)
+        x = F.dropout(x, p=self.args.drop_prob, training=self.training)
+
+        x_flat = x.contiguous().view(-1, x.size(-1))
+        scores = self.linear(x_flat).view(x.size(0), x.size(1))
+        scores.data.masked_fill_(x_mask.data, -float('inf'))
+        alpha = F.softmax(scores)
+
+        atten_seq = alpha.unsqueeze(-1).transpose(1, 2).bmm(x).transpose(1, 2).squeeze(-1)
+
+        return atten_seq

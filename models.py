@@ -225,6 +225,10 @@ class FusionNet(nn.Module):
                                                  hidden_size=args.concepts_size,
                                                  num_layers=1)
 
+        # Output
+        self.summarized_final_ques = layers.LinearSelfAttn(args=args,
+                                                           input_size=2 * args.concepts_size)
+
     def forward(self, cw_idxs, qw_idxs, cw_pos, cw_ner, cw_freq, cqw_extra):
         """Inputs:
 
@@ -298,5 +302,8 @@ class FusionNet(nn.Module):
                                                  v_c, c_mask)
 
         U_c = self.final_context(torch.cat([v_c, v_hat_c], 2), 1)[0]
+
+        # Output
+        u_q = self.summarized_final_ques(U_q, q_mask)
 
         return U_c, U_q
