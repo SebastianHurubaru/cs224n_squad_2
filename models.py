@@ -98,14 +98,24 @@ class BiDAFExtra(nn.Module):
 
     def __init__(self, word_vectors, args):
         super(BiDAFExtra, self).__init__()
-        self.emb = layers.EmbeddingExtra(word_vectors=word_vectors,
-                                         args=args)
 
-        self.enc = layers.RNNEncoder(input_size=args.hidden_size,
+        self.c_emb = layers.EmbeddingExtra(word_vectors=word_vectors,
+                                           args=args,
+                                           aux_feat=True)
+
+        self.q_emb = layers.EmbeddingExtra(word_vectors=word_vectors,
+                                           args=args,
+                                           aux_feat=False)
+
+        self.c_enc = layers.RNNEncoder(input_size=args.hidden_size + args.num_features,
                                      hidden_size=args.hidden_size,
                                      num_layers=1,
-                                     drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else 0.,
-                                     extra_size=args.num_features + 1)
+                                     drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else 0.)
+
+        self.q_enc = layers.RNNEncoder(input_size=args.hidden_size,
+                                       hidden_size=args.hidden_size,
+                                       num_layers=1,
+                                       drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else 0.)
 
         self.att = layers.BiDAFAttention(hidden_size=2 * args.hidden_size,
                                          drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else None)
@@ -121,28 +131,26 @@ class BiDAFExtra(nn.Module):
         self.args = args
 
     def forward(self, cw_idxs, qw_idxs, cw_pos, cw_ner, cw_freq, cqw_extra):
+
         c_mask = torch.zeros_like(cw_idxs) != cw_idxs
         q_mask = torch.zeros_like(qw_idxs) != qw_idxs
         c_len, q_len = c_mask.sum(-1), q_mask.sum(-1)
 
-        c_emb = self.emb(cw_idxs, c_mask, c_len, cw_pos, cw_ner)  # (batch_size, c_len, hidden_size)
-        q_emb = self.emb(qw_idxs, q_mask, q_len, torch.zeros_like(qw_idxs),
-                         torch.zeros_like(qw_idxs))  # (batch_size, q_len, hidden_size)
+        c_emb = self.c_emb(cw_idxs, c_mask, c_len, cw_pos, cw_ner, cw_freq)
+        q_emb = self.q_emb(qw_idxs, q_mask, q_len, None, None, None)
 
-        c_enc = self.enc(
-            torch.cat([c_emb, cw_freq.unsqueeze(-1), cqw_extra], 2),
-            c_len)  # (batch_size, c_len, 2 * hidden_size)
+        c_enc = self.c_enc(
+            torch.cat([c_emb, cqw_extra], 2),
+            c_len)
 
-        qw_freq = torch.zeros_like(qw_idxs, dtype=torch.float32).contiguous().view(q_emb.shape[0], q_emb.shape[1], 1)
-        qcw_extra = torch.full_like(q_emb[:, :, :self.args.num_features], -1)
-        q_enc = self.enc(torch.cat([q_emb, qw_freq, qcw_extra], 2), q_len)  # (batch_size, q_len, 2 * hidden_size)
+        q_enc = self.q_enc(q_emb, q_len)
 
         att = self.att(c_enc, q_enc,
-                       c_mask, q_mask)  # (batch_size, c_len, 8 * hidden_size)
+                       c_mask, q_mask)
 
-        mod = self.mod(att, c_len)  # (batch_size, c_len, 2 * hidden_size)
+        mod = self.mod(att, c_len)
 
-        out = self.out(att, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
+        out = self.out(att, mod, c_mask)
 
         return out
 

@@ -41,53 +41,69 @@ class Embedding(nn.Module):
 
 
 class EmbeddingExtra(nn.Module):
-    """Embedding layer used by BiDAF, without the character-level component.
 
-    Word-level embeddings are further refined using a 2-layer Highway Encoder
+    def __init__(self, args, word_vectors, aux_feat=True):
+
+        """Embedding layer used by BiDAFExtra, without the character-level component.
+
+    Word-level embeddings are extended with Contextual Word Vectors, POS tags, NER and word frequency.
+    Further refined using a 2-layer Highway Encoder
     (see `HighwayEncoder` class for details).
 
     Args:
+        args: arguments passed to the main program
         word_vectors (torch.Tensor): Pre-trained word vectors.
         hidden_size (int): Size of hidden activations.
-        drop_prob (float): Probability of zero-ing out activations
-    """
 
-    def __init__(self, args, word_vectors):
+    """
         super(EmbeddingExtra, self).__init__()
+
+        self.args = args
+        self.aux_feat = aux_feat
+
         self.drop_prob = args.drop_prob if hasattr(args, 'drop_prob') else 0.
         self.embed = nn.Embedding.from_pretrained(word_vectors)
         input_size = args.glove_dim
 
-        self.cove = MTLSTM(args)
+        self.cove = MTLSTM(args, word_vectors)
         input_size += args.cove_dim
 
-        # POS embeddings
-        self.pos_embed = nn.Embedding(args.pos_size, args.pos_dim)
-        input_size += args.pos_dim
+        if self.aux_feat is True:
 
-        # NER embeddings
-        self.ner_embed = nn.Embedding(args.ner_size, args.ner_dim)
-        input_size += args.ner_dim
+            # POS embeddings
+            self.pos_embed = nn.Embedding(args.pos_size, args.pos_dim)
+            input_size += args.pos_dim
+
+            # NER embeddings
+            self.ner_embed = nn.Embedding(args.ner_size, args.ner_dim)
+            input_size += args.ner_dim
+
+            # Word frequency
+            input_size += 1
 
         self.proj = nn.Linear(input_size, args.hidden_size, bias=False)
         self.hwy = HighwayEncoder(2, args.hidden_size)
 
-    def forward(self, x, x_mask, lengths, x_pos, x_ner):
+    def forward(self, x, x_mask, lengths, x_pos, x_ner, x_freq):
         input_list = []
 
         glove_emb = self.embed(x)  # (batch_size, seq_len, embed_size)
         glove_emb = F.dropout(glove_emb, self.drop_prob, self.training)
         input_list.append(glove_emb)
 
-        _, cove_emb = self.cove(self.embed(x), lengths)
+        _, cove_emb = self.cove(x, lengths)
         cove_emb = F.dropout(cove_emb, self.drop_prob, self.training)
         input_list.append(cove_emb)
 
-        pos_emb = self.pos_embed(x_pos)
-        input_list.append(pos_emb)
+        if self.aux_feat is True:
 
-        ner_emb = self.ner_embed(x_ner)
-        input_list.append(ner_emb)
+            pos_emb = self.pos_embed(x_pos)
+            input_list.append(pos_emb)
+
+            ner_emb = self.ner_embed(x_ner)
+            input_list.append(ner_emb)
+
+            input_list.append(x_freq.unsqueeze(-1))
 
         inputs = torch.cat(input_list, 2)
 
@@ -144,11 +160,10 @@ class RNNEncoder(nn.Module):
                  input_size,
                  hidden_size,
                  num_layers,
-                 drop_prob=0.,
-                 extra_size=0):
+                 drop_prob=0):
         super(RNNEncoder, self).__init__()
         self.drop_prob = drop_prob
-        self.rnn = nn.LSTM(input_size + extra_size, hidden_size, num_layers,
+        self.rnn = nn.LSTM(input_size, hidden_size, num_layers,
                            batch_first=True,
                            bidirectional=True,
                            dropout=drop_prob if num_layers > 1 else 0.)
