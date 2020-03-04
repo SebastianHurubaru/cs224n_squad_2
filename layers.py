@@ -8,7 +8,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from util import masked_softmax
 
@@ -24,6 +23,7 @@ class Embedding(nn.Module):
         hidden_size (int): Size of hidden activations.
         drop_prob (float): Probability of zero-ing out activations
     """
+
     def __init__(self, word_vectors, hidden_size, drop_prob):
         super(Embedding, self).__init__()
         self.drop_prob = drop_prob
@@ -32,10 +32,10 @@ class Embedding(nn.Module):
         self.hwy = HighwayEncoder(2, hidden_size)
 
     def forward(self, x):
-        emb = self.embed(x)   # (batch_size, seq_len, embed_size)
+        emb = self.embed(x)  # (batch_size, seq_len, embed_size)
         emb = F.dropout(emb, self.drop_prob, self.training)
         emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
-        emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
+        emb = self.hwy(emb)  # (batch_size, seq_len, hidden_size)
 
         return emb
 
@@ -51,8 +51,8 @@ class EmbeddingExtra(nn.Module):
         hidden_size (int): Size of hidden activations.
         drop_prob (float): Probability of zero-ing out activations
     """
-    def __init__(self, args, word_vectors):
 
+    def __init__(self, args, word_vectors):
         super(EmbeddingExtra, self).__init__()
         self.drop_prob = args.drop_prob if hasattr(args, 'drop_prob') else 0.
         self.embed = nn.Embedding.from_pretrained(word_vectors)
@@ -73,10 +73,9 @@ class EmbeddingExtra(nn.Module):
         self.hwy = HighwayEncoder(2, args.hidden_size)
 
     def forward(self, x, x_mask, lengths, x_pos, x_ner):
-
         input_list = []
 
-        glove_emb = self.embed(x)   # (batch_size, seq_len, embed_size)
+        glove_emb = self.embed(x)  # (batch_size, seq_len, embed_size)
         glove_emb = F.dropout(glove_emb, self.drop_prob, self.training)
         input_list.append(glove_emb)
 
@@ -93,9 +92,10 @@ class EmbeddingExtra(nn.Module):
         inputs = torch.cat(input_list, 2)
 
         emb = self.proj(inputs)  # (batch_size, seq_len, hidden_size)
-        emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
+        emb = self.hwy(emb)  # (batch_size, seq_len, hidden_size)
 
         return emb
+
 
 class HighwayEncoder(nn.Module):
     """Encode an input sequence using a highway network.
@@ -109,6 +109,7 @@ class HighwayEncoder(nn.Module):
         num_layers (int): Number of layers in the highway encoder.
         hidden_size (int): Size of hidden activations.
     """
+
     def __init__(self, num_layers, hidden_size):
         super(HighwayEncoder, self).__init__()
         self.transforms = nn.ModuleList([nn.Linear(hidden_size, hidden_size)
@@ -138,6 +139,7 @@ class RNNEncoder(nn.Module):
         num_layers (int): Number of layers of RNN cells to use.
         drop_prob (float): Probability of zero-ing out activations.
     """
+
     def __init__(self,
                  input_size,
                  hidden_size,
@@ -146,19 +148,18 @@ class RNNEncoder(nn.Module):
                  extra_size=0):
         super(RNNEncoder, self).__init__()
         self.drop_prob = drop_prob
-        self.rnn = nn.LSTM(input_size+extra_size, hidden_size, num_layers,
+        self.rnn = nn.LSTM(input_size + extra_size, hidden_size, num_layers,
                            batch_first=True,
                            bidirectional=True,
                            dropout=drop_prob if num_layers > 1 else 0.)
 
     def forward(self, x, lengths):
-
         # Save original padded length for use by pad_packed_sequence
         orig_len = x.size(1)
 
         # Sort by length and pack sequence for RNN
         lengths, sort_idx = lengths.sort(0, descending=True)
-        x = x[sort_idx]     # (batch_size, seq_len, input_size)
+        x = x[sort_idx]  # (batch_size, seq_len, input_size)
         x = pack_padded_sequence(x, lengths, batch_first=True)
 
         # Apply RNN
@@ -168,7 +169,7 @@ class RNNEncoder(nn.Module):
         # Unpack and reverse sort
         x, _ = pad_packed_sequence(x, batch_first=True, total_length=orig_len)
         _, unsort_idx = sort_idx.sort(0)
-        x = x[unsort_idx]   # (batch_size, seq_len, 2 * hidden_size)
+        x = x[unsort_idx]  # (batch_size, seq_len, 2 * hidden_size)
 
         # Apply dropout (RNN applies dropout after all but the last layer)
         x = F.dropout(x, self.drop_prob, self.training)
@@ -191,6 +192,7 @@ class BiDAFAttention(nn.Module):
         hidden_size (int): Size of hidden activations.
         drop_prob (float): Probability of zero-ing out activations.
     """
+
     def __init__(self, hidden_size, drop_prob=0.1):
         super(BiDAFAttention, self).__init__()
         self.drop_prob = drop_prob
@@ -204,11 +206,11 @@ class BiDAFAttention(nn.Module):
     def forward(self, c, q, c_mask, q_mask):
         batch_size, c_len, _ = c.size()
         q_len = q.size(1)
-        s = self.get_similarity_matrix(c, q)        # (batch_size, c_len, q_len)
+        s = self.get_similarity_matrix(c, q)  # (batch_size, c_len, q_len)
         c_mask = c_mask.view(batch_size, c_len, 1)  # (batch_size, c_len, 1)
         q_mask = q_mask.view(batch_size, 1, q_len)  # (batch_size, 1, q_len)
-        s1 = masked_softmax(s, q_mask, dim=2)       # (batch_size, c_len, q_len)
-        s2 = masked_softmax(s, c_mask, dim=1)       # (batch_size, c_len, q_len)
+        s1 = masked_softmax(s, q_mask, dim=2)  # (batch_size, c_len, q_len)
+        s2 = masked_softmax(s, c_mask, dim=1)  # (batch_size, c_len, q_len)
 
         # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
         a = torch.bmm(s1, q)
@@ -236,8 +238,8 @@ class BiDAFAttention(nn.Module):
 
         # Shapes: (batch_size, c_len, q_len)
         s0 = torch.matmul(c, self.c_weight).expand([-1, -1, q_len])
-        s1 = torch.matmul(q, self.q_weight).transpose(1, 2)\
-                                           .expand([-1, c_len, -1])
+        s1 = torch.matmul(q, self.q_weight).transpose(1, 2) \
+            .expand([-1, c_len, -1])
         s2 = torch.matmul(c * self.cq_weight, q.transpose(1, 2))
         s = s0 + s1 + s2 + self.bias
 
@@ -257,6 +259,7 @@ class BiDAFOutput(nn.Module):
         hidden_size (int): Hidden size used in the BiDAF model.
         drop_prob (float): Probability of zero-ing out activations.
     """
+
     def __init__(self, hidden_size, drop_prob):
         super(BiDAFOutput, self).__init__()
         self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
@@ -315,6 +318,7 @@ class FNRNNEncoder(nn.Module):
         # Transpose back
         hiddens = [h.transpose(0, 1) for h in hiddens]
         return hiddens[1:]
+
 
 class MTLSTM(nn.Module):
 
@@ -377,20 +381,20 @@ class MTLSTM(nn.Module):
 # Attention layer
 class FullAttention(nn.Module):
     def __init__(self, args, full_size, hidden_size, num_level):
-
         super(FullAttention, self).__init__()
-        assert(hidden_size % num_level == 0)
+        assert (hidden_size % num_level == 0)
         self.full_size = full_size
         self.hidden_size = hidden_size
         self.attsize_per_lvl = hidden_size // num_level
         self.num_level = num_level
         self.linear = nn.Linear(full_size, hidden_size, bias=False)
-        self.linear_final = nn.Parameter(torch.ones(1, hidden_size), requires_grad = True)
+        self.linear_final = nn.Parameter(torch.ones(1, hidden_size), requires_grad=True)
         self.output_size = hidden_size
 
         self.args = args
 
-        print("Full Attention: (atten. {} -> {}, take {}) x {}".format(self.full_size, self.attsize_per_lvl, hidden_size // num_level, self.num_level))
+        print("Full Attention: (atten. {} -> {}, take {}) x {}".format(self.full_size, self.attsize_per_lvl,
+                                                                       hidden_size // num_level, self.num_level))
 
     def forward(self, x1_att, x2_att, x2, x2_mask):
         """
@@ -411,52 +415,95 @@ class FullAttention(nn.Module):
         final_v = self.linear_final.expand_as(x2_key)
         x2_key = final_v * x2_key
 
-        x1_rep = x1_key.view(-1, len1, self.num_level, self.attsize_per_lvl).transpose(1, 2).contiguous().view(-1, len1, self.attsize_per_lvl)
-        x2_rep = x2_key.view(-1, len2, self.num_level, self.attsize_per_lvl).transpose(1, 2).contiguous().view(-1, len2, self.attsize_per_lvl)
+        x1_rep = x1_key.view(-1, len1, self.num_level, self.attsize_per_lvl).transpose(1, 2).contiguous().view(-1, len1,
+                                                                                                               self.attsize_per_lvl)
+        x2_rep = x2_key.view(-1, len2, self.num_level, self.attsize_per_lvl).transpose(1, 2).contiguous().view(-1, len2,
+                                                                                                               self.attsize_per_lvl)
 
-        scores = x1_rep.bmm(x2_rep.transpose(1, 2)).view(-1, self.num_level, len1, len2) # batch * num_level * len1 * len2
+        scores = x1_rep.bmm(x2_rep.transpose(1, 2)).view(-1, self.num_level, len1,
+                                                         len2)  # batch * num_level * len1 * len2
 
         x2_mask = x2_mask.unsqueeze(1).unsqueeze(2).expand_as(scores)
         scores.data.masked_fill_(x2_mask.data, -float('inf'))
 
-        alpha_flat = F.softmax(scores.view(-1, len2))
+        alpha_flat = F.softmax(scores.view(-1, len2), dim=-1)
         alpha = alpha_flat.view(-1, len1, len2)
 
         size_per_level = self.hidden_size // self.num_level
-        atten_seq = alpha.bmm(x2.contiguous().view(-1, len2, self.num_level, size_per_level).transpose(1, 2).contiguous().view(-1, len2, size_per_level))
+        atten_seq = alpha.bmm(
+            x2.contiguous().view(-1, len2, self.num_level, size_per_level).transpose(1, 2).contiguous().view(-1, len2,
+                                                                                                             size_per_level))
 
-        return atten_seq.view(-1, self.num_level, len1, size_per_level).transpose(1, 2).contiguous().view(-1, len1, self.hidden_size)
+        return atten_seq.view(-1, self.num_level, len1, size_per_level).transpose(1, 2).contiguous().view(-1, len1,
+                                                                                                          self.hidden_size)
+
 
 # For summarizing a set of vectors into a single vector
 class LinearSelfAttn(nn.Module):
-
     """Self attention over a sequence:
     * o_i = softmax(Wx_i) for x_i in X.
     """
-    def __init__(self, args, input_size, hidden_size=1):
+
+    def __init__(self, args, input_size, hidden_size=1, is_output=False):
         super(LinearSelfAttn, self).__init__()
 
         self.args = args
 
         self.input_size = input_size
         self.hidden_size = hidden_size
+        self.is_output = is_output
 
-        self.linear = nn.Linear(input_size, 1, bias=False)
+        self.linear = nn.Linear(input_size, hidden_size, bias=False)
 
-    def forward(self, x, x_mask):
+    def forward(self, x1, x2, x2_mask):
         """
         x = batch * len * hdim
         x_mask = batch * len
         """
 
-        len = x.size(1)
-        x = F.dropout(x, p=self.args.drop_prob, training=self.training)
+        softmax_fn = F.log_softmax if self.is_output else F.softmax
 
-        x_flat = x.contiguous().view(-1, x.size(-1))
-        scores = self.linear(x_flat).view(x.size(0), x.size(1))
-        scores.data.masked_fill_(x_mask.data, -float('inf'))
-        alpha = F.softmax(scores)
+        if x1 is None:
 
-        atten_seq = alpha.unsqueeze(-1).transpose(1, 2).bmm(x).transpose(1, 2).squeeze(-1)
+            x2 = F.dropout(x2, p=self.args.drop_prob, training=self.training)
 
-        return atten_seq
+            x2_flat = x2.contiguous().view(-1, x2.size(-1))
+            scores = self.linear(x2_flat).view(x2.size(0), x2.size(1))
+            scores.data.masked_fill_(x2_mask.data, -float('inf'))
+
+            alpha = softmax_fn(scores, dim=-1)
+
+        else:
+
+            len1 = x1.size(1)
+            len2 = x2.size(1)
+
+            x1 = F.dropout(x1, p=self.args.drop_prob, training=self.training)
+            x2 = F.dropout(x2, p=self.args.drop_prob, training=self.training)
+
+            x2_flat = x2.contiguous().view(-1, self.input_size)
+            x2_key = self.linear(x2_flat).view(-1, len2, self.hidden_size)
+
+            x1_rep = x1.unsqueeze(-1).transpose(1, 2)
+            x2_rep = x2_key.view(-1, len2, 1, self.hidden_size).transpose(1, 2).contiguous().view(-1,
+                                                                                              len2,
+                                                                                              self.hidden_size)
+
+            scores = x1_rep.bmm(x2_rep.transpose(1, 2)).squeeze(1)
+
+            # x2_mask = x2_mask.type(torch.float32)
+            # masked_logits = x2_mask * scores + (1 - x2_mask) * -1e30
+            # alpha_flat = softmax_fn(masked_logits, dim=-1)
+
+            scores.data.masked_fill_(x2_mask.data, -float('inf'))
+            alpha_flat = softmax_fn(scores, dim=-1)
+
+            alpha = alpha_flat
+
+        result = alpha
+
+        if self.is_output == False:
+            atten_seq = alpha.unsqueeze(-1).transpose(1, 2).bmm(x2).transpose(1, 2).squeeze(-1)
+            result = atten_seq
+
+        return result

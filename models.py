@@ -229,6 +229,22 @@ class FusionNet(nn.Module):
         self.summarized_final_ques = layers.LinearSelfAttn(args=args,
                                                            input_size=2 * args.concepts_size)
 
+        self.span_start = layers.LinearSelfAttn(args=args,
+                                                input_size=2 * args.concepts_size,
+                                                hidden_size=2 * args.concepts_size,
+                                                is_output=True)
+
+        self.combine_context_span_start_ques_under = layers.FNRNNEncoder(args=args,
+                                                                         input_size=2 * args.concepts_size * args.enc_rnn_layers,
+                                                                         hidden_size=args.concepts_size,
+                                                                         num_layers=1,
+                                                                         rnn_type=nn.GRU)
+
+        self.span_end = layers.LinearSelfAttn(args=args,
+                                              input_size=2 * args.concepts_size,
+                                              hidden_size=2 * args.concepts_size,
+                                              is_output=True)
+
     def forward(self, cw_idxs, qw_idxs, cw_pos, cw_ner, cw_freq, cqw_extra):
         """Inputs:
 
@@ -304,6 +320,13 @@ class FusionNet(nn.Module):
         U_c = self.final_context(torch.cat([v_c, v_hat_c], 2), 1)[0]
 
         # Output
-        u_q = self.summarized_final_ques(U_q, q_mask)
+        u_q = self.summarized_final_ques(None, U_q, q_mask)
 
-        return U_c, U_q
+        P_s = self.span_start(u_q, U_c, c_mask)
+
+        combine = U_c.transpose(1, 2).bmm(P_s.unsqueeze(-1)).squeeze(-1)
+        v_q = self.combine_context_span_start_ques_under(torch.cat([combine, u_q], 1).unsqueeze(1), 1)[0]
+
+        P_e = self.span_end(v_q.squeeze(1), U_c, c_mask)
+
+        return P_s, P_e
