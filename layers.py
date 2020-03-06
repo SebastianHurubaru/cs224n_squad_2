@@ -383,6 +383,7 @@ class FullAttention(nn.Module):
     def __init__(self, args, full_size, hidden_size, num_level):
         super(FullAttention, self).__init__()
         assert (hidden_size % num_level == 0)
+        self.args = args
         self.full_size = full_size
         self.hidden_size = hidden_size
         self.attsize_per_lvl = hidden_size // num_level
@@ -390,8 +391,7 @@ class FullAttention(nn.Module):
         self.linear = nn.Linear(full_size, hidden_size, bias=False)
         self.linear_final = nn.Parameter(torch.ones(1, hidden_size), requires_grad=True)
         self.output_size = hidden_size
-
-        self.args = args
+        self.dropout=nn.Dropout(self.args.drop_prob)
 
         print("Full Attention: (atten. {} -> {}, take {}) x {}".format(self.full_size, self.attsize_per_lvl,
                                                                        hidden_size // num_level, self.num_level))
@@ -406,10 +406,8 @@ class FullAttention(nn.Module):
 
         len1 = x1_att.size(1)
         len2 = x2_att.size(1)
-
-        x1_att = F.dropout(x1_att, p=self.args.drop_prob, training=self.training)
-        x2_att = F.dropout(x2_att, p=self.args.drop_prob, training=self.training)
-
+        x1_att = self.dropout(x1_att)
+        x2_att = self.dropout(x2_att)
         x1_key = F.relu(self.linear(x1_att.view(-1, self.full_size)))
         x2_key = F.relu(self.linear(x2_att.view(-1, self.full_size)))
         final_v = self.linear_final.expand_as(x2_key)
@@ -417,23 +415,19 @@ class FullAttention(nn.Module):
 
         x1_rep = x1_key.view(-1, len1, self.num_level, self.attsize_per_lvl).transpose(1, 2).contiguous().view(-1, len1,
                                                                                                                self.attsize_per_lvl)
+
         x2_rep = x2_key.view(-1, len2, self.num_level, self.attsize_per_lvl).transpose(1, 2).contiguous().view(-1, len2,
                                                                                                                self.attsize_per_lvl)
-
         scores = x1_rep.bmm(x2_rep.transpose(1, 2)).view(-1, self.num_level, len1,
                                                          len2)  # batch * num_level * len1 * len2
-
         x2_mask = x2_mask.unsqueeze(1).unsqueeze(2).expand_as(scores)
-        scores.data.masked_fill_(x2_mask.data, -float('inf'))
-
+        scores.data.masked_fill_(x2_mask.data == 0, -1e9)
         alpha_flat = F.softmax(scores.view(-1, len2), dim=-1)
         alpha = alpha_flat.view(-1, len1, len2)
-
         size_per_level = self.hidden_size // self.num_level
         atten_seq = alpha.bmm(
             x2.contiguous().view(-1, len2, self.num_level, size_per_level).transpose(1, 2).contiguous().view(-1, len2,
                                                                                                              size_per_level))
-
         return atten_seq.view(-1, self.num_level, len1, size_per_level).transpose(1, 2).contiguous().view(-1, len1,
                                                                                                           self.hidden_size)
 
@@ -469,7 +463,7 @@ class LinearSelfAttn(nn.Module):
 
             x2_flat = x2.contiguous().view(-1, x2.size(-1))
             scores = self.linear(x2_flat).view(x2.size(0), x2.size(1))
-            scores.data.masked_fill_(x2_mask.data, -float('inf'))
+            scores.data.masked_fill_(x2_mask.data == 0, -1e9)
 
             alpha = softmax_fn(scores, dim=-1)
 
@@ -495,7 +489,7 @@ class LinearSelfAttn(nn.Module):
             # masked_logits = x2_mask * scores + (1 - x2_mask) * -1e30
             # alpha_flat = softmax_fn(masked_logits, dim=-1)
 
-            scores.data.masked_fill_(x2_mask.data, -float('inf'))
+            scores.data.masked_fill_(x2_mask.data == 0, -1e9)
             alpha_flat = softmax_fn(scores, dim=-1)
 
             alpha = alpha_flat
