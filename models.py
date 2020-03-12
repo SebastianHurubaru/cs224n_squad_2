@@ -155,7 +155,9 @@ class BiDAFExtra(nn.Module):
 
 
 class FusionNet(nn.Module):
-    """Network for the FusionNet Module."""
+    """
+    Network for the FusionNet Module.
+    """
 
     def __init__(self, args, word_vectors):
         super(FusionNet, self).__init__()
@@ -184,7 +186,7 @@ class FusionNet(nn.Module):
         extra_feat_dim = args.num_features + 1
 
         # Fully-Aware Multi-level Fusion: Word-level
-        self.full_attn_word_level = layers.FullAttention(args, args.glove_dim, args.glove_dim, 1)
+        self.full_attn_word_level = layers.FullyAwareAttention(args, args.glove_dim, args.glove_dim, 1)
 
         # Reading
         self.reading_context = layers.FNRNNEncoder(args=args,
@@ -204,28 +206,28 @@ class FusionNet(nn.Module):
                                               num_layers=1)
 
         # FA Multi-Level Fusion
-        self.full_attn_low_level = layers.FullAttention(args,
-                                                        input_size + 2 * args.concepts_size * args.enc_rnn_layers,
-                                                        args.concepts_size * args.enc_rnn_layers,
-                                                        args.enc_rnn_layers)
-        self.full_attn_high_level = layers.FullAttention(args,
-                                                         input_size + 2 * args.concepts_size * args.enc_rnn_layers,
-                                                         args.concepts_size * args.enc_rnn_layers,
-                                                         args.enc_rnn_layers)
-        self.full_attn_understand = layers.FullAttention(args,
-                                                         input_size + 2 * args.concepts_size * args.enc_rnn_layers,
-                                                         args.concepts_size * args.enc_rnn_layers,
-                                                         args.enc_rnn_layers)
+        self.full_attn_low_level = layers.FullyAwareAttention(args,
+                                                              input_size + 2 * args.concepts_size * args.enc_rnn_layers,
+                                                              args.concepts_size * args.enc_rnn_layers,
+                                                              args.enc_rnn_layers)
+        self.full_attn_high_level = layers.FullyAwareAttention(args,
+                                                               input_size + 2 * args.concepts_size * args.enc_rnn_layers,
+                                                               args.concepts_size * args.enc_rnn_layers,
+                                                               args.enc_rnn_layers)
+        self.full_attn_understand = layers.FullyAwareAttention(args,
+                                                               input_size + 2 * args.concepts_size * args.enc_rnn_layers,
+                                                               args.concepts_size * args.enc_rnn_layers,
+                                                               args.enc_rnn_layers)
 
         self.fully_focused_context = layers.FNRNNEncoder(args=args,
                                                          input_size=2 * args.concepts_size * 5,
                                                          hidden_size=args.concepts_size,
                                                          num_layers=1)
 
-        self.full_attn_history_of_word = layers.FullAttention(args,
-                                                              input_size + 2 * args.concepts_size * 6,
-                                                              args.concepts_size * args.enc_rnn_layers,
-                                                              args.enc_rnn_layers)
+        self.full_attn_history_of_word = layers.FullyAwareAttention(args,
+                                                                    input_size + 2 * args.concepts_size * 6,
+                                                                    args.concepts_size * args.enc_rnn_layers,
+                                                                    args.enc_rnn_layers)
 
         self.final_context = layers.FNRNNEncoder(args=args,
                                                  input_size=2 * args.concepts_size * args.enc_rnn_layers,
@@ -233,13 +235,13 @@ class FusionNet(nn.Module):
                                                  num_layers=1)
 
         # Output
-        self.summarized_final_ques = layers.LinearSelfAttn(args=args,
-                                                           input_size=2 * args.concepts_size)
+        self.summarized_final_ques = layers.LinearSelfAttention(args=args,
+                                                                input_size=2 * args.concepts_size)
 
-        self.span_start = layers.LinearSelfAttn(args=args,
-                                                input_size=2 * args.concepts_size,
-                                                hidden_size=2 * args.concepts_size,
-                                                is_output=True)
+        self.span_start = layers.LinearSelfAttention(args=args,
+                                                     input_size=2 * args.concepts_size,
+                                                     hidden_size=2 * args.concepts_size,
+                                                     is_output=True)
 
         self.combine_context_span_start_ques_under = layers.FNRNNEncoder(args=args,
                                                                          input_size=2 * args.concepts_size * args.enc_rnn_layers,
@@ -247,13 +249,14 @@ class FusionNet(nn.Module):
                                                                          num_layers=1,
                                                                          rnn_type=nn.GRU)
 
-        self.span_end = layers.LinearSelfAttn(args=args,
-                                              input_size=2 * args.concepts_size,
-                                              hidden_size=2 * args.concepts_size,
-                                              is_output=True)
+        self.span_end = layers.LinearSelfAttention(args=args,
+                                                   input_size=2 * args.concepts_size,
+                                                   hidden_size=2 * args.concepts_size,
+                                                   is_output=True)
 
     def forward(self, cw_idxs, qw_idxs, cw_pos, cw_ner, cw_freq, cqw_extra):
-        """Inputs:
+        """
+        Inputs:
 
         """
 

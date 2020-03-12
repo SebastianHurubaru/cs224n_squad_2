@@ -69,7 +69,6 @@ class EmbeddingExtra(nn.Module):
         input_size += args.cove_dim
 
         if self.aux_feat is True:
-
             # POS embeddings
             self.pos_embed = nn.Embedding(args.pos_size, args.pos_dim)
             input_size += args.pos_dim
@@ -96,7 +95,6 @@ class EmbeddingExtra(nn.Module):
         input_list.append(cove_emb)
 
         if self.aux_feat is True:
-
             pos_emb = self.pos_embed(x_pos)
             input_list.append(pos_emb)
 
@@ -314,24 +312,20 @@ class FNRNNEncoder(nn.Module):
         self.args = args
 
     def forward(self, x, x_mask):
-        # Transpose batch and sequence dims
+
         x = x.transpose(0, 1)
 
-        # Encode all layers
         hiddens = [x]
         for i in range(self.num_layers):
             rnn_input = torch.cat(hiddens, 2)
 
-            # Apply dropout to input
             if self.args.drop_prob > 0:
                 rnn_input = F.dropout(rnn_input, self.args.drop_prob, self.training)
 
-            # Forward
             self.rnns[i].flatten_parameters()
             rnn_output = self.rnns[i](rnn_input)[0]
             hiddens.append(rnn_output)
 
-        # Transpose back
         hiddens = [h.transpose(0, 1) for h in hiddens]
         return hiddens[1:]
 
@@ -340,7 +334,7 @@ class MTLSTM(nn.Module):
 
     def __init__(self, args, word_vectors):
         """
-        Initialize an Multi-Timescale LSTM
+        Initialize a Multi-Timescale LSTM
 
         Arguments:
 
@@ -394,11 +388,10 @@ class MTLSTM(nn.Module):
         return output1, output2
 
 
-# Attention layer
-class FullAttention(nn.Module):
+class FullyAwareAttention(nn.Module):
     def __init__(self, args, full_size, hidden_size, num_level):
-        super(FullAttention, self).__init__()
-        assert (hidden_size % num_level == 0)
+        super(FullyAwareAttention, self).__init__()
+
         self.full_size = full_size
         self.hidden_size = hidden_size
         self.attsize_per_lvl = hidden_size // num_level
@@ -431,7 +424,7 @@ class FullAttention(nn.Module):
                                                                                                                self.attsize_per_lvl)
 
         scores = x1_rep.bmm(x2_rep.transpose(1, 2)).view(-1, self.num_level, len1,
-                                                         len2)  # batch * num_level * len1 * len2
+                                                         len2)
 
         x2_mask = x2_mask.unsqueeze(1).unsqueeze(2).expand_as(scores)
         scores.data.masked_fill_(x2_mask.data, -1e30)
@@ -448,14 +441,13 @@ class FullAttention(nn.Module):
                                                                                                           self.hidden_size)
 
 
-# For summarizing a set of vectors into a single vector
-class LinearSelfAttn(nn.Module):
+class LinearSelfAttention(nn.Module):
     """
     Self attention over a sequence:
     """
 
     def __init__(self, args, input_size, hidden_size=1, is_output=False):
-        super(LinearSelfAttn, self).__init__()
+        super(LinearSelfAttention, self).__init__()
 
         self.args = args
 
