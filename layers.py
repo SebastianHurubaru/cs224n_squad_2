@@ -339,7 +339,8 @@ class FNRNNEncoder(nn.Module):
 class MTLSTM(nn.Module):
 
     def __init__(self, args, word_vectors):
-        """Initialize an Multi-Timescale LSTM
+        """
+        Initialize an Multi-Timescale LSTM
 
         Arguments:
 
@@ -348,7 +349,6 @@ class MTLSTM(nn.Module):
 
         self.embed = nn.Embedding.from_pretrained(word_vectors)
 
-        # state_dict = torch.load(opt['MTLSTM_path'])
         self.rnn1 = nn.LSTM(args.glove_dim, args.glove_dim, num_layers=1, bidirectional=True)
         self.rnn2 = nn.LSTM(args.cove_dim, args.glove_dim, num_layers=1, bidirectional=True)
 
@@ -409,15 +409,9 @@ class FullAttention(nn.Module):
 
         self.args = args
 
-        print("Full Attention: (atten. {} -> {}, take {}) x {}".format(self.full_size, self.attsize_per_lvl,
-                                                                       hidden_size // num_level, self.num_level))
-
     def forward(self, x1_att, x2_att, x2, x2_mask):
         """
-        x1_att: batch * len1 * full_size
-        x2_att: batch * len2 * full_size
-        x2: batch * len2 * hidden_size
-        x2_mask: batch * len2
+
         """
 
         len1 = x1_att.size(1)
