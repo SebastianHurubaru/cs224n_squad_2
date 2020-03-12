@@ -107,6 +107,11 @@ def main(args):
                 # Setup for forward
                 cw_idxs = cw_idxs.to(device)
                 qw_idxs = qw_idxs.to(device)
+                cw_pos = cw_pos.to(device)
+                cw_ner = cw_ner.to(device)
+                cw_freq = cw_freq.to(device)
+                cqw_extra = cqw_extra.to(device)
+
                 batch_size = cw_idxs.size(0)
                 optimizer.zero_grad()
 
@@ -181,9 +186,13 @@ def evaluate(args, model, data_loader, device, eval_file, max_len, use_squad_v2)
             # Setup for forward
             cw_idxs = cw_idxs.to(device)
             qw_idxs = qw_idxs.to(device)
+            cw_pos = cw_pos.to(device)
+            cw_ner = cw_ner.to(device)
+            cw_freq = cw_freq.to(device)
+            cqw_extra = cqw_extra.to(device)
+
             batch_size = cw_idxs.size(0)
 
-            # Forward
             # Forward
             if args.model == 'bidaf':
                 log_p1, log_p2 = model(cw_idxs, qw_idxs)

@@ -327,6 +327,7 @@ class FNRNNEncoder(nn.Module):
                 rnn_input = F.dropout(rnn_input, self.args.drop_prob, self.training)
 
             # Forward
+            self.rnns[i].flatten_parameters()
             rnn_output = self.rnns[i](rnn_input)[0]
             hiddens.append(rnn_output)
 
@@ -439,7 +440,7 @@ class FullAttention(nn.Module):
                                                          len2)  # batch * num_level * len1 * len2
 
         x2_mask = x2_mask.unsqueeze(1).unsqueeze(2).expand_as(scores)
-        scores.data.masked_fill_(1 - x2_mask.data, -1e30)
+        scores.data.masked_fill_(x2_mask.data, -1e30)
 
         alpha_flat = F.softmax(scores.view(-1, len2), dim=-1)
         alpha = alpha_flat.view(-1, len1, len2)
@@ -455,8 +456,8 @@ class FullAttention(nn.Module):
 
 # For summarizing a set of vectors into a single vector
 class LinearSelfAttn(nn.Module):
-    """Self attention over a sequence:
-    * o_i = softmax(Wx_i) for x_i in X.
+    """
+    Self attention over a sequence:
     """
 
     def __init__(self, args, input_size, hidden_size=1, is_output=False):
@@ -472,8 +473,7 @@ class LinearSelfAttn(nn.Module):
 
     def forward(self, x1, x2, x2_mask):
         """
-        x = batch * len * hdim
-        x_mask = batch * len
+
         """
 
         softmax_fn = F.log_softmax if self.is_output else F.softmax
@@ -484,13 +484,12 @@ class LinearSelfAttn(nn.Module):
 
             x2_flat = x2.contiguous().view(-1, x2.size(-1))
             scores = self.linear(x2_flat).view(x2.size(0), x2.size(1))
-            scores.data.masked_fill_(1-x2_mask.data, -1e30)
+            scores.data.masked_fill_(x2_mask.data, -1e30)
 
             alpha = softmax_fn(scores, dim=-1)
 
         else:
 
-            len1 = x1.size(1)
             len2 = x2.size(1)
 
             x1 = F.dropout(x1, p=self.args.drop_prob, training=self.training)
@@ -500,17 +499,11 @@ class LinearSelfAttn(nn.Module):
             x2_key = self.linear(x2_flat).view(-1, len2, self.hidden_size)
 
             x1_rep = x1.unsqueeze(-1).transpose(1, 2)
-            x2_rep = x2_key.view(-1, len2, 1, self.hidden_size).transpose(1, 2).contiguous().view(-1,
-                                                                                              len2,
-                                                                                              self.hidden_size)
 
+            x2_rep = x2_key
             scores = x1_rep.bmm(x2_rep.transpose(1, 2)).squeeze(1)
 
-            # x2_mask = x2_mask.type(torch.float32)
-            # masked_logits = x2_mask * scores + (1 - x2_mask) * -1e30
-            # alpha_flat = softmax_fn(masked_logits, dim=-1)
-
-            scores.data.masked_fill_(1-x2_mask.data, -1e30)
+            scores.data.masked_fill_(x2_mask.data, -1e30)
             alpha_flat = softmax_fn(scores, dim=-1)
 
             alpha = alpha_flat

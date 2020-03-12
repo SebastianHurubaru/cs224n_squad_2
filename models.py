@@ -108,9 +108,9 @@ class BiDAFExtra(nn.Module):
                                            aux_feat=False)
 
         self.c_enc = layers.RNNEncoder(input_size=args.hidden_size + args.num_features,
-                                     hidden_size=args.hidden_size,
-                                     num_layers=1,
-                                     drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else 0.)
+                                       hidden_size=args.hidden_size,
+                                       num_layers=1,
+                                       drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else 0.)
 
         self.q_enc = layers.RNNEncoder(input_size=args.hidden_size,
                                        hidden_size=args.hidden_size,
@@ -131,7 +131,6 @@ class BiDAFExtra(nn.Module):
         self.args = args
 
     def forward(self, cw_idxs, qw_idxs, cw_pos, cw_ner, cw_freq, cqw_extra):
-
         c_mask = torch.zeros_like(cw_idxs) != cw_idxs
         q_mask = torch.zeros_like(qw_idxs) != qw_idxs
         c_len, q_len = c_mask.sum(-1), q_mask.sum(-1)
@@ -262,6 +261,10 @@ class FusionNet(nn.Module):
         q_mask = torch.zeros_like(qw_idxs) != qw_idxs
         c_len, q_len = c_mask.sum(-1), q_mask.sum(-1)
 
+        # Negate the mask, i.e. 1 if padded
+        c_mask = ~c_mask
+        q_mask = ~q_mask
+
         # Word embeddings
         g_c, g_q = self.glove(cw_idxs), self.glove(qw_idxs)
 
@@ -332,9 +335,7 @@ class FusionNet(nn.Module):
 
         P_s = self.span_start(u_q, U_c, c_mask)
 
-        P_s.data.masked_fill_(1-c_mask.data, 0)
-        combine = U_c.transpose(1, 2).bmm(P_s.unsqueeze(-1)).squeeze(-1)
-        P_s.data.masked_fill_(1 - c_mask.data, -1e30)
+        combine = U_c.transpose(1, 2).bmm(torch.exp(P_s.unsqueeze(-1))).squeeze(-1)
 
         v_q = self.combine_context_span_start_ques_under(torch.cat([combine, u_q], 1).unsqueeze(1), 1)[0]
 
