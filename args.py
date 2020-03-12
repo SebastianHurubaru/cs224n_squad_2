@@ -119,10 +119,6 @@ def get_train_args():
                         type=int,
                         default=30,
                         help='Number of epochs for which to train. Negative means forever.')
-    parser.add_argument('--drop_prob',
-                        type=float,
-                        default=0.3,
-                        help='Probability of zeroing an activation in dropout layers.')
     parser.add_argument('--metric_name',
                         type=str,
                         default='F1',
@@ -243,6 +239,10 @@ def add_train_test_args(parser):
                         default=64,
                         help='Batch size per GPU. Scales automatically when \
                               multiple GPUs are available.')
+    parser.add_argument('--drop_prob',
+                        type=float,
+                        default=0.3,
+                        help='Probability of zeroing an activation in dropout layers.')
     parser.add_argument('--use_squad_v2',
                         type=lambda s: s.lower().startswith('t'),
                         default=True,
