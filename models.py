@@ -173,7 +173,7 @@ class FusionNet(nn.Module):
         input_size += args.glove_dim
 
         # Contextualized embeddings
-        self.cove = layers.MTLSTM(args, word_vectors)
+        self.cove = layers.MT_LSTM(args, word_vectors)
         input_size += self.cove.output_size
 
         # POS embeddings
@@ -189,21 +189,21 @@ class FusionNet(nn.Module):
         self.full_attn_word_level = layers.FullyAwareAttention(args, args.glove_dim, args.glove_dim, 1)
 
         # Reading
-        self.reading_context = layers.FNRNNEncoder(args=args,
-                                                   input_size=input_size + args.pos_dim + args.ner_dim + extra_feat_dim + self.full_attn_word_level.output_size,
-                                                   hidden_size=args.concepts_size,
-                                                   num_layers=args.enc_rnn_layers)
+        self.reading_context = layers.MultiLevelRNNEncoder(args=args,
+                                                           input_size=input_size + args.pos_dim + args.ner_dim + extra_feat_dim + self.full_attn_word_level.output_size,
+                                                           hidden_size=args.concepts_size,
+                                                           num_layers=args.enc_rnn_layers)
 
-        self.reading_question = layers.FNRNNEncoder(args=args,
-                                                    input_size=input_size,
-                                                    hidden_size=args.concepts_size,
-                                                    num_layers=args.enc_rnn_layers)
+        self.reading_question = layers.MultiLevelRNNEncoder(args=args,
+                                                            input_size=input_size,
+                                                            hidden_size=args.concepts_size,
+                                                            num_layers=args.enc_rnn_layers)
 
         # Question understanding
-        self.final_ques = layers.FNRNNEncoder(args=args,
-                                              input_size=2 * args.concepts_size * args.enc_rnn_layers,
-                                              hidden_size=args.concepts_size,
-                                              num_layers=1)
+        self.final_ques = layers.MultiLevelRNNEncoder(args=args,
+                                                      input_size=2 * args.concepts_size * args.enc_rnn_layers,
+                                                      hidden_size=args.concepts_size,
+                                                      num_layers=1)
 
         # FA Multi-Level Fusion
         self.full_attn_low_level = layers.FullyAwareAttention(args,
@@ -219,20 +219,20 @@ class FusionNet(nn.Module):
                                                                args.concepts_size * args.enc_rnn_layers,
                                                                args.enc_rnn_layers)
 
-        self.fully_focused_context = layers.FNRNNEncoder(args=args,
-                                                         input_size=2 * args.concepts_size * 5,
-                                                         hidden_size=args.concepts_size,
-                                                         num_layers=1)
+        self.fully_focused_context = layers.MultiLevelRNNEncoder(args=args,
+                                                                 input_size=2 * args.concepts_size * 5,
+                                                                 hidden_size=args.concepts_size,
+                                                                 num_layers=1)
 
         self.full_attn_history_of_word = layers.FullyAwareAttention(args,
                                                                     input_size + 2 * args.concepts_size * 6,
                                                                     args.concepts_size * args.enc_rnn_layers,
                                                                     args.enc_rnn_layers)
 
-        self.final_context = layers.FNRNNEncoder(args=args,
-                                                 input_size=2 * args.concepts_size * args.enc_rnn_layers,
-                                                 hidden_size=args.concepts_size,
-                                                 num_layers=1)
+        self.final_context = layers.MultiLevelRNNEncoder(args=args,
+                                                         input_size=2 * args.concepts_size * args.enc_rnn_layers,
+                                                         hidden_size=args.concepts_size,
+                                                         num_layers=1)
 
         # Output
         self.summarized_final_ques = layers.LinearSelfAttention(args=args,
@@ -243,11 +243,11 @@ class FusionNet(nn.Module):
                                                      hidden_size=2 * args.concepts_size,
                                                      is_output=True)
 
-        self.combine_context_span_start_ques_under = layers.FNRNNEncoder(args=args,
-                                                                         input_size=2 * args.concepts_size * args.enc_rnn_layers,
-                                                                         hidden_size=args.concepts_size,
-                                                                         num_layers=1,
-                                                                         rnn_type=nn.GRU)
+        self.combine_context_span_start_ques_under = layers.MultiLevelRNNEncoder(args=args,
+                                                                                 input_size=2 * args.concepts_size * args.enc_rnn_layers,
+                                                                                 hidden_size=args.concepts_size,
+                                                                                 num_layers=1,
+                                                                                 rnn_type=nn.GRU)
 
         self.span_end = layers.LinearSelfAttention(args=args,
                                                    input_size=2 * args.concepts_size,

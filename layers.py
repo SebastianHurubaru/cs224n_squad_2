@@ -65,7 +65,7 @@ class EmbeddingExtra(nn.Module):
         self.embed = nn.Embedding.from_pretrained(word_vectors)
         input_size = args.glove_dim
 
-        self.cove = MTLSTM(args, word_vectors)
+        self.cove = MT_LSTM(args, word_vectors)
         input_size += args.cove_dim
 
         if self.aux_feat is True:
@@ -299,10 +299,10 @@ class BiDAFOutput(nn.Module):
         return log_p1, log_p2
 
 
-class FNRNNEncoder(nn.Module):
+class MultiLevelRNNEncoder(nn.Module):
 
     def __init__(self, args, input_size, hidden_size, num_layers, rnn_type=nn.LSTM):
-        super(FNRNNEncoder, self).__init__()
+        super(MultiLevelRNNEncoder, self).__init__()
         self.num_layers = num_layers
         self.rnns = nn.ModuleList()
         for i in range(num_layers):
@@ -330,7 +330,7 @@ class FNRNNEncoder(nn.Module):
         return hiddens[1:]
 
 
-class MTLSTM(nn.Module):
+class MT_LSTM(nn.Module):
 
     def __init__(self, args, word_vectors):
         """
@@ -339,7 +339,7 @@ class MTLSTM(nn.Module):
         Arguments:
 
         """
-        super(MTLSTM, self).__init__()
+        super(MT_LSTM, self).__init__()
 
         self.embed = nn.Embedding.from_pretrained(word_vectors)
 
@@ -394,10 +394,10 @@ class FullyAwareAttention(nn.Module):
 
         self.full_size = full_size
         self.hidden_size = hidden_size
-        self.attsize_per_lvl = hidden_size // num_level
+        self.attention_size_per_level = hidden_size // num_level
         self.num_level = num_level
-        self.linear = nn.Linear(full_size, hidden_size, bias=False)
-        self.linear_final = nn.Parameter(torch.ones(1, hidden_size), requires_grad=True)
+        self.linear_1 = nn.Linear(full_size, hidden_size, bias=False)
+        self.linear_2 = nn.Parameter(torch.ones(1, hidden_size), requires_grad=True)
         self.output_size = hidden_size
 
         self.args = args
@@ -413,15 +413,15 @@ class FullyAwareAttention(nn.Module):
         x1_att = F.dropout(x1_att, p=self.args.drop_prob, training=self.training)
         x2_att = F.dropout(x2_att, p=self.args.drop_prob, training=self.training)
 
-        x1_key = F.relu(self.linear(x1_att.view(-1, self.full_size)))
-        x2_key = F.relu(self.linear(x2_att.view(-1, self.full_size)))
-        final_v = self.linear_final.expand_as(x2_key)
+        x1_key = F.relu(self.linear_1(x1_att.view(-1, self.full_size)))
+        x2_key = F.relu(self.linear_1(x2_att.view(-1, self.full_size)))
+        final_v = self.linear_2.expand_as(x2_key)
         x2_key = final_v * x2_key
 
-        x1_rep = x1_key.view(-1, len1, self.num_level, self.attsize_per_lvl).transpose(1, 2).contiguous().view(-1, len1,
-                                                                                                               self.attsize_per_lvl)
-        x2_rep = x2_key.view(-1, len2, self.num_level, self.attsize_per_lvl).transpose(1, 2).contiguous().view(-1, len2,
-                                                                                                               self.attsize_per_lvl)
+        x1_rep = x1_key.view(-1, len1, self.num_level, self.attention_size_per_level).transpose(1, 2).contiguous().view(-1, len1,
+                                                                                                                        self.attention_size_per_level)
+        x2_rep = x2_key.view(-1, len2, self.num_level, self.attention_size_per_level).transpose(1, 2).contiguous().view(-1, len2,
+                                                                                                                        self.attention_size_per_level)
 
         scores = x1_rep.bmm(x2_rep.transpose(1, 2)).view(-1, self.num_level, len1,
                                                          len2)
