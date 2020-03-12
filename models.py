@@ -243,11 +243,10 @@ class FusionNet(nn.Module):
                                                      hidden_size=2 * args.concepts_size,
                                                      is_output=True)
 
-        self.combine_context_span_start_ques_under = layers.MultiLevelRNNEncoder(args=args,
-                                                                                 input_size=2 * args.concepts_size * args.enc_rnn_layers,
-                                                                                 hidden_size=args.concepts_size,
-                                                                                 num_layers=1,
-                                                                                 rnn_type=nn.GRU)
+        self.combine_context_span_start_ques_under = nn.GRU(input_size=2 * args.concepts_size,
+                                                            hidden_size=2 * args.concepts_size,
+                                                            batch_first=True,
+                                                            bidirectional=False)
 
         self.span_end = layers.LinearSelfAttention(args=args,
                                                    input_size=2 * args.concepts_size,
@@ -340,7 +339,7 @@ class FusionNet(nn.Module):
 
         combine = U_c.transpose(1, 2).bmm(torch.exp(P_s.unsqueeze(-1))).squeeze(-1)
 
-        v_q = self.combine_context_span_start_ques_under(torch.cat([combine, u_q], 1).unsqueeze(1), 1)[0]
+        v_q, _ = self.combine_context_span_start_ques_under(combine.unsqueeze(1), u_q.unsqueeze(0))
 
         P_e = self.span_end(v_q.squeeze(1), U_c, c_mask)
 
