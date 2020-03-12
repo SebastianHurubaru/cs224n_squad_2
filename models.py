@@ -332,7 +332,10 @@ class FusionNet(nn.Module):
 
         P_s = self.span_start(u_q, U_c, c_mask)
 
+        P_s.data.masked_fill_(1-c_mask.data, 0)
         combine = U_c.transpose(1, 2).bmm(P_s.unsqueeze(-1)).squeeze(-1)
+        P_s.data.masked_fill_(1 - c_mask.data, -1e30)
+
         v_q = self.combine_context_span_start_ques_under(torch.cat([combine, u_q], 1).unsqueeze(1), 1)[0]
 
         P_e = self.span_end(v_q.squeeze(1), U_c, c_mask)
