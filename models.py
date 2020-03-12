@@ -339,6 +339,7 @@ class FusionNet(nn.Module):
 
         combine = U_c.transpose(1, 2).bmm(torch.exp(P_s.unsqueeze(-1))).squeeze(-1)
 
+        self.combine_context_span_start_ques_under.flatten_parameters()
         v_q, _ = self.combine_context_span_start_ques_under(combine.unsqueeze(1), u_q.unsqueeze(0))
 
         P_e = self.span_end(v_q.squeeze(1), U_c, c_mask)
