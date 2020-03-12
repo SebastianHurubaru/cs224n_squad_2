@@ -118,7 +118,7 @@ class BiDAFExtra(nn.Module):
                                        drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else 0.)
 
         self.att = layers.BiDAFAttention(hidden_size=2 * args.hidden_size,
-                                         drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else None)
+                                         drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else 0.)
 
         self.mod = layers.RNNEncoder(input_size=8 * args.hidden_size,
                                      hidden_size=args.hidden_size,
@@ -126,7 +126,7 @@ class BiDAFExtra(nn.Module):
                                      drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else 0.)
 
         self.out = layers.BiDAFOutput(hidden_size=args.hidden_size,
-                                      drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else None)
+                                      drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else 0.)
 
         self.args = args
 
