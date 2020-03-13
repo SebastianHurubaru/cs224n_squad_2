@@ -98,17 +98,27 @@ class BiDAFExtra(nn.Module):
 
     def __init__(self, word_vectors, args):
         super(BiDAFExtra, self).__init__()
-        self.emb = layers.EmbeddingExtra(word_vectors=word_vectors,
-                                         args=args)
 
-        self.enc = layers.RNNEncoder(input_size=args.hidden_size,
-                                     hidden_size=args.hidden_size,
-                                     num_layers=1,
-                                     drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else 0.,
-                                     extra_size=args.num_features + 1)
+        self.c_emb = layers.EmbeddingExtra(word_vectors=word_vectors,
+                                           args=args,
+                                           aux_feat=True)
+
+        self.q_emb = layers.EmbeddingExtra(word_vectors=word_vectors,
+                                           args=args,
+                                           aux_feat=False)
+
+        self.c_enc = layers.RNNEncoder(input_size=args.hidden_size + args.num_features,
+                                       hidden_size=args.hidden_size,
+                                       num_layers=1,
+                                       drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else 0.)
+
+        self.q_enc = layers.RNNEncoder(input_size=args.hidden_size,
+                                       hidden_size=args.hidden_size,
+                                       num_layers=1,
+                                       drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else 0.)
 
         self.att = layers.BiDAFAttention(hidden_size=2 * args.hidden_size,
-                                         drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else None)
+                                         drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else 0.)
 
         self.mod = layers.RNNEncoder(input_size=8 * args.hidden_size,
                                      hidden_size=args.hidden_size,
@@ -116,7 +126,7 @@ class BiDAFExtra(nn.Module):
                                      drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else 0.)
 
         self.out = layers.BiDAFOutput(hidden_size=args.hidden_size,
-                                      drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else None)
+                                      drop_prob=args.drop_prob if hasattr(args, 'drop_prob') else 0.)
 
         self.args = args
 
@@ -125,30 +135,29 @@ class BiDAFExtra(nn.Module):
         q_mask = torch.zeros_like(qw_idxs) != qw_idxs
         c_len, q_len = c_mask.sum(-1), q_mask.sum(-1)
 
-        c_emb = self.emb(cw_idxs, c_mask, c_len, cw_pos, cw_ner)  # (batch_size, c_len, hidden_size)
-        q_emb = self.emb(qw_idxs, q_mask, q_len, torch.zeros_like(qw_idxs),
-                         torch.zeros_like(qw_idxs))  # (batch_size, q_len, hidden_size)
+        c_emb = self.c_emb(cw_idxs, c_mask, c_len, cw_pos, cw_ner, cw_freq)
+        q_emb = self.q_emb(qw_idxs, q_mask, q_len, None, None, None)
 
-        c_enc = self.enc(
-            torch.cat([c_emb, cw_freq.unsqueeze(-1), cqw_extra], 2),
-            c_len)  # (batch_size, c_len, 2 * hidden_size)
+        c_enc = self.c_enc(
+            torch.cat([c_emb, cqw_extra], 2),
+            c_len)
 
-        qw_freq = torch.zeros_like(qw_idxs, dtype=torch.float32).contiguous().view(q_emb.shape[0], q_emb.shape[1], 1)
-        qcw_extra = torch.full_like(q_emb[:, :, :self.args.num_features], -1)
-        q_enc = self.enc(torch.cat([q_emb, qw_freq, qcw_extra], 2), q_len)  # (batch_size, q_len, 2 * hidden_size)
+        q_enc = self.q_enc(q_emb, q_len)
 
         att = self.att(c_enc, q_enc,
-                       c_mask, q_mask)  # (batch_size, c_len, 8 * hidden_size)
+                       c_mask, q_mask)
 
-        mod = self.mod(att, c_len)  # (batch_size, c_len, 2 * hidden_size)
+        mod = self.mod(att, c_len)
 
-        out = self.out(att, mod, c_mask)  # 2 tensors, each (batch_size, c_len)
+        out = self.out(att, mod, c_mask)
 
         return out
 
 
 class FusionNet(nn.Module):
-    """Network for the FusionNet Module."""
+    """
+    Network for the FusionNet Module.
+    """
 
     def __init__(self, args, word_vectors):
         super(FusionNet, self).__init__()
@@ -164,7 +173,7 @@ class FusionNet(nn.Module):
         input_size += args.glove_dim
 
         # Contextualized embeddings
-        self.cove = layers.MTLSTM(args, word_vectors)
+        self.cove = layers.MT_LSTM(args, word_vectors)
         input_size += self.cove.output_size
 
         # POS embeddings
@@ -177,62 +186,86 @@ class FusionNet(nn.Module):
         extra_feat_dim = args.num_features + 1
 
         # Fully-Aware Multi-level Fusion: Word-level
-        self.full_attn_word_level = layers.FullAttention(args, args.glove_dim, args.glove_dim, 1)
+        self.full_attn_word_level = layers.FullyAwareAttention(args, args.glove_dim, args.glove_dim, 1)
 
         # Reading
-        self.reading_context = layers.FNRNNEncoder(args=args,
-                                                   input_size=input_size + args.pos_dim + args.ner_dim + extra_feat_dim + self.full_attn_word_level.output_size,
-                                                   hidden_size=args.concepts_size,
-                                                   num_layers=args.enc_rnn_layers)
+        self.reading_context = layers.MultiLevelRNNEncoder(args=args,
+                                                           input_size=input_size + args.pos_dim + args.ner_dim + extra_feat_dim + self.full_attn_word_level.output_size,
+                                                           hidden_size=args.concepts_size,
+                                                           num_layers=args.enc_rnn_layers)
 
-        self.reading_question = layers.FNRNNEncoder(args=args,
-                                                    input_size=input_size,
-                                                    hidden_size=args.concepts_size,
-                                                    num_layers=args.enc_rnn_layers)
+        self.reading_question = layers.MultiLevelRNNEncoder(args=args,
+                                                            input_size=input_size,
+                                                            hidden_size=args.concepts_size,
+                                                            num_layers=args.enc_rnn_layers)
 
         # Question understanding
-        self.final_ques = layers.FNRNNEncoder(args=args,
-                                              input_size=2 * args.concepts_size * args.enc_rnn_layers,
-                                              hidden_size=args.concepts_size,
-                                              num_layers=1)
+        self.final_ques = layers.MultiLevelRNNEncoder(args=args,
+                                                      input_size=2 * args.concepts_size * args.enc_rnn_layers,
+                                                      hidden_size=args.concepts_size,
+                                                      num_layers=1)
 
         # FA Multi-Level Fusion
-        self.full_attn_low_level = layers.FullAttention(args,
-                                                        input_size + 2 * args.concepts_size * args.enc_rnn_layers,
-                                                        args.concepts_size * args.enc_rnn_layers,
-                                                        args.enc_rnn_layers)
-        self.full_attn_high_level = layers.FullAttention(args,
-                                                         input_size + 2 * args.concepts_size * args.enc_rnn_layers,
-                                                         args.concepts_size * args.enc_rnn_layers,
-                                                         args.enc_rnn_layers)
-        self.full_attn_understand = layers.FullAttention(args,
-                                                         input_size + 2 * args.concepts_size * args.enc_rnn_layers,
-                                                         args.concepts_size * args.enc_rnn_layers,
-                                                         args.enc_rnn_layers)
+        self.full_attn_low_level = layers.FullyAwareAttention(args,
+                                                              input_size + 2 * args.concepts_size * args.enc_rnn_layers,
+                                                              args.concepts_size * args.enc_rnn_layers,
+                                                              args.enc_rnn_layers)
+        self.full_attn_high_level = layers.FullyAwareAttention(args,
+                                                               input_size + 2 * args.concepts_size * args.enc_rnn_layers,
+                                                               args.concepts_size * args.enc_rnn_layers,
+                                                               args.enc_rnn_layers)
+        self.full_attn_understand = layers.FullyAwareAttention(args,
+                                                               input_size + 2 * args.concepts_size * args.enc_rnn_layers,
+                                                               args.concepts_size * args.enc_rnn_layers,
+                                                               args.enc_rnn_layers)
 
-        self.fully_focused_context = layers.FNRNNEncoder(args=args,
-                                                         input_size=2 * args.concepts_size * 5,
+        self.fully_focused_context = layers.MultiLevelRNNEncoder(args=args,
+                                                                 input_size=2 * args.concepts_size * 5,
+                                                                 hidden_size=args.concepts_size,
+                                                                 num_layers=1)
+
+        self.full_attn_history_of_word = layers.FullyAwareAttention(args,
+                                                                    input_size + 2 * args.concepts_size * 6,
+                                                                    args.concepts_size * args.enc_rnn_layers,
+                                                                    args.enc_rnn_layers)
+
+        self.final_context = layers.MultiLevelRNNEncoder(args=args,
+                                                         input_size=2 * args.concepts_size * args.enc_rnn_layers,
                                                          hidden_size=args.concepts_size,
                                                          num_layers=1)
 
-        self.full_attn_history_of_word = layers.FullAttention(args,
-                                                              input_size + 2 * args.concepts_size * 6,
-                                                              args.concepts_size * args.enc_rnn_layers,
-                                                              args.enc_rnn_layers)
+        # Output
+        self.summarized_final_ques = layers.LinearSelfAttention(args=args,
+                                                                input_size=2 * args.concepts_size)
 
-        self.final_context = layers.FNRNNEncoder(args=args,
-                                                 input_size=2 * args.concepts_size * args.enc_rnn_layers,
-                                                 hidden_size=args.concepts_size,
-                                                 num_layers=1)
+        self.span_start = layers.LinearSelfAttention(args=args,
+                                                     input_size=2 * args.concepts_size,
+                                                     hidden_size=2 * args.concepts_size,
+                                                     is_output=True)
+
+        self.combine_context_span_start_ques_under = nn.GRU(input_size=2 * args.concepts_size,
+                                                            hidden_size=2 * args.concepts_size,
+                                                            batch_first=True,
+                                                            bidirectional=False)
+
+        self.span_end = layers.LinearSelfAttention(args=args,
+                                                   input_size=2 * args.concepts_size,
+                                                   hidden_size=2 * args.concepts_size,
+                                                   is_output=True)
 
     def forward(self, cw_idxs, qw_idxs, cw_pos, cw_ner, cw_freq, cqw_extra):
-        """Inputs:
+        """
+        Inputs:
 
         """
 
         c_mask = torch.zeros_like(cw_idxs) != cw_idxs
         q_mask = torch.zeros_like(qw_idxs) != qw_idxs
         c_len, q_len = c_mask.sum(-1), q_mask.sum(-1)
+
+        # Negate the mask, i.e. 1 if padded
+        c_mask = ~c_mask
+        q_mask = ~q_mask
 
         # Word embeddings
         g_c, g_q = self.glove(cw_idxs), self.glove(qw_idxs)
@@ -280,7 +313,7 @@ class FusionNet(nn.Module):
         h_hat_c_l = self.full_attn_low_level(HoW_c, HoW_q,
                                              h_q_l, q_mask)
 
-        # Low-level fusion
+        # High-level fusion
         h_hat_c_h = self.full_attn_high_level(HoW_c, HoW_q,
                                               h_q_h, q_mask)
 
@@ -299,4 +332,17 @@ class FusionNet(nn.Module):
 
         U_c = self.final_context(torch.cat([v_c, v_hat_c], 2), 1)[0]
 
-        return U_c, U_q
+        # Output
+        u_q = self.summarized_final_ques(None, U_q, q_mask)
+
+        P_s = self.span_start(u_q, U_c, c_mask)
+
+        combine = U_c.transpose(1, 2).bmm(torch.exp(P_s.unsqueeze(-1))).squeeze(-1)
+
+        combine = F.dropout(combine, self.args.drop_prob, self.training)
+        self.combine_context_span_start_ques_under.flatten_parameters()
+        v_q, _ = self.combine_context_span_start_ques_under(combine.unsqueeze(1), u_q.unsqueeze(0))
+
+        P_e = self.span_end(v_q.squeeze(1), U_c, c_mask)
+
+        return P_s, P_e
