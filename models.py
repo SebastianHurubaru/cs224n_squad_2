@@ -313,7 +313,7 @@ class FusionNet(nn.Module):
         h_hat_c_l = self.full_attn_low_level(HoW_c, HoW_q,
                                              h_q_l, q_mask)
 
-        # Low-level fusion
+        # High-level fusion
         h_hat_c_h = self.full_attn_high_level(HoW_c, HoW_q,
                                               h_q_h, q_mask)
 
@@ -339,6 +339,7 @@ class FusionNet(nn.Module):
 
         combine = U_c.transpose(1, 2).bmm(torch.exp(P_s.unsqueeze(-1))).squeeze(-1)
 
+        combine = F.dropout(combine, self.args.drop_prob, self.training)
         self.combine_context_span_start_ques_under.flatten_parameters()
         v_q, _ = self.combine_context_span_start_ques_under(combine.unsqueeze(1), u_q.unsqueeze(0))
 

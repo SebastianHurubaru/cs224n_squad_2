@@ -490,9 +490,7 @@ class LinearSelfAttention(nn.Module):
             scores = x1_rep.bmm(x2_rep.transpose(1, 2)).squeeze(1)
 
             scores.data.masked_fill_(x2_mask.data, -1e30)
-            alpha_flat = softmax_fn(scores, dim=-1)
-
-            alpha = alpha_flat
+            alpha = softmax_fn(scores, dim=-1)
 
         result = alpha
 

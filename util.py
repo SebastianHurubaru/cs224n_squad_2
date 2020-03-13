@@ -41,8 +41,10 @@ class SQuAD(data.Dataset):
         data_path (str): Path to .npz file containing pre-processed dataset.
         use_v2 (bool): Whether to use SQuAD 2.0 questions. Otherwise only use SQuAD 1.1.
     """
-    def __init__(self, data_path, use_v2=True):
+    def __init__(self, data_path, args):
         super(SQuAD, self).__init__()
+
+        use_v2 = args.use_squad_v2
 
         dataset = np.load(data_path)
         self.context_idxs = torch.from_numpy(dataset['context_idxs']).long()
@@ -59,16 +61,19 @@ class SQuAD(data.Dataset):
         if use_v2:
             # SQuAD 2.0: Use index 0 for no-answer token (token 1 = OOV)
             batch_size, c_len, w_len = self.context_char_idxs.size()
+
             ones = torch.ones((batch_size, 1), dtype=torch.int64)
+
             self.context_idxs = torch.cat((ones, self.context_idxs), dim=1)
             self.question_idxs = torch.cat((ones, self.question_idxs), dim=1)
-            self.context_pos_tags = torch.cat((ones, self.context_pos_tags), dim=1)
-            self.context_ner_tags = torch.cat((ones, self.context_ner_tags), dim=1)
-            ones = torch.ones((batch_size, 1), dtype=torch.float64)
-            self.context_freqs = torch.cat((ones, self.context_freqs), dim=1)
+            self.context_pos_tags = torch.cat((ones*(args.pos_size-1), self.context_pos_tags), dim=1)
+            self.context_ner_tags = torch.cat((ones*(args.ner_size-1), self.context_ner_tags), dim=1)
 
-            ones = torch.ones((batch_size, 1, self.context_ques_features.shape[2]), dtype=torch.int64)
-            self.context_ques_features = torch.cat((ones, self.context_ques_features), dim=1)
+            ones = torch.ones((batch_size, 1), dtype=torch.float64)
+            self.context_freqs = torch.cat((ones*(-1), self.context_freqs), dim=1)
+
+            zeros = torch.zeros((batch_size, 1, self.context_ques_features.shape[2]), dtype=torch.int64)
+            self.context_ques_features = torch.cat((zeros, self.context_ques_features), dim=1)
 
             ones = torch.ones((batch_size, 1, w_len), dtype=torch.int64)
             self.context_char_idxs = torch.cat((ones, self.context_char_idxs), dim=1)
@@ -153,6 +158,7 @@ def collate_fn(examples):
     context_pos_tags = merge_1d(context_pos_tags)
     context_ner_tags = merge_1d(context_ner_tags, pad_value=-1)
     context_freqs = merge_1d(context_freqs, dtype=torch.float32)
+    context_freqs[:, 0] *= (-0.)
     context_ques_features = merge_2d(context_ques_features, dtype=torch.float32, pad_value=-1)
     y1s = merge_0d(y1s)
     y2s = merge_0d(y2s)

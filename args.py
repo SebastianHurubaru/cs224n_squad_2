@@ -124,6 +124,11 @@ def get_train_args():
                         default='F1',
                         choices=('NLL', 'EM', 'F1'),
                         help='Name of dev metric to determine best checkpoint.')
+    parser.add_argument('--optimizer',
+                        type=str,
+                        default='Adadelta',
+                        choices=('Adadelta', 'Adamax'),
+                        help='Name of the optimizer to be used.')
     parser.add_argument('--max_checkpoints',
                         type=int,
                         default=5,
@@ -136,6 +141,12 @@ def get_train_args():
                         type=int,
                         default=224,
                         help='Random seed for reproducibility.')
+
+    parser.add_argument('--use_ema',
+                        type=bool,
+                        default=True,
+                        help='Use exponential moving average of parameters.')
+
     parser.add_argument('--ema_decay',
                         type=float,
                         default=0.999,
@@ -280,7 +291,7 @@ def add_train_test_args(parser):
                         help='Size of extra features')
     parser.add_argument('--pos_size',
                         type=int,
-                        default=56,
+                        default=56+1,
                         help='How many kinds of POS tags.')
     parser.add_argument('--pos_dim',
                         type=int,
@@ -288,7 +299,7 @@ def add_train_test_args(parser):
                         help='The embedding dimension for POS tags.')
     parser.add_argument('--ner_size',
                         type=int,
-                        default=19,
+                        default=19+1,
                         help='How many kinds of named entity tags.')
     parser.add_argument('--ner_dim',
                         type=int,

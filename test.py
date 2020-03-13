@@ -62,7 +62,7 @@ def main(args):
     # Get data loader
     log.info('Building dataset...')
     record_file = vars(args)[f'{args.split}_record_file']
-    dataset = SQuAD(record_file, args.use_squad_v2)
+    dataset = SQuAD(record_file, args)
     data_loader = data.DataLoader(dataset,
                                   batch_size=args.batch_size,
                                   shuffle=False,

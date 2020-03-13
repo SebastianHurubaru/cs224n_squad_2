@@ -65,7 +65,8 @@ def main(args):
         step = 0
     model = model.to(device)
     model.train()
-    ema = util.EMA(model, args.ema_decay)
+    if args.use_ema:
+        ema = util.EMA(model, args.ema_decay)
 
     # Get saver
     saver = util.CheckpointSaver(args.save_dir,
@@ -75,19 +76,25 @@ def main(args):
                                  log=log)
 
     # Get optimizer and scheduler
-    optimizer = optim.Adadelta(model.parameters(), args.lr,
-                               weight_decay=args.l2_wd)
-    scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
+    parameters = [p for p in model.parameters() if p.requires_grad]
+    if args.optimizer == 'Adadelta':
+        optimizer = optim.Adadelta(parameters, args.lr,
+                                   weight_decay=args.l2_wd)
+    elif args.optimizer == 'Adamax':
+        optimizer = optim.Adamax(parameters, args.lr,
+                                 weight_decay=args.l2_wd)
+
+    # scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
 
     # Get data loader
     log.info('Building dataset...')
-    train_dataset = SQuAD(args.train_record_file, args.use_squad_v2)
+    train_dataset = SQuAD(args.train_record_file, args)
     train_loader = data.DataLoader(train_dataset,
                                    batch_size=args.batch_size,
                                    shuffle=True,
                                    num_workers=args.num_workers,
                                    collate_fn=collate_fn)
-    dev_dataset = SQuAD(args.dev_record_file, args.use_squad_v2)
+    dev_dataset = SQuAD(args.dev_record_file, args)
     dev_loader = data.DataLoader(dev_dataset,
                                  batch_size=args.batch_size,
                                  shuffle=False,
@@ -102,7 +109,7 @@ def main(args):
         epoch += 1
         log.info(f'Starting epoch {epoch}...')
         with torch.enable_grad(), \
-                tqdm(total=len(train_loader.dataset)) as progress_bar:
+             tqdm(total=len(train_loader.dataset)) as progress_bar:
             for cw_idxs, cc_idxs, qw_idxs, qc_idxs, cw_pos, cw_ner, cw_freq, cqw_extra, y1, y2, ids in train_loader:
                 # Setup for forward
                 cw_idxs = cw_idxs.to(device)
@@ -128,8 +135,9 @@ def main(args):
                 loss.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                 optimizer.step()
-                scheduler.step(step // batch_size)
-                ema(model, step // batch_size)
+                # scheduler.step(step // batch_size)
+                if args.use_ema:
+                    ema(model, step // batch_size)
 
                 # Log info
                 step += batch_size
@@ -147,13 +155,15 @@ def main(args):
 
                     # Evaluate and save checkpoint
                     log.info(f'Evaluating at step {step}...')
-                    ema.assign(model)
+                    if args.use_ema:
+                        ema.assign(model)
                     results, pred_dict = evaluate(args, model, dev_loader, device,
                                                   args.dev_eval_file,
                                                   args.max_ans_len,
                                                   args.use_squad_v2)
                     saver.save(step, model, results[args.metric_name], device)
-                    ema.resume(model)
+                    if args.use_ema:
+                        ema.resume(model)
 
                     # Log to console
                     results_str = ', '.join(f'{k}: {v:05.2f}' for k, v in results.items())
@@ -171,7 +181,6 @@ def main(args):
                                    num_visuals=args.num_visuals)
 
 
-
 def evaluate(args, model, data_loader, device, eval_file, max_len, use_squad_v2):
     nll_meter = util.AverageMeter()
 
@@ -180,7 +189,7 @@ def evaluate(args, model, data_loader, device, eval_file, max_len, use_squad_v2)
     with open(eval_file, 'r') as fh:
         gold_dict = json_load(fh)
     with torch.no_grad(), \
-            tqdm(total=len(data_loader.dataset)) as progress_bar:
+         tqdm(total=len(data_loader.dataset)) as progress_bar:
         for cw_idxs, cc_idxs, qw_idxs, qc_idxs, cw_pos, cw_ner, cw_freq, cqw_extra, y1, y2, ids in data_loader:
 
             # Setup for forward
