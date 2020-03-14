@@ -69,6 +69,8 @@ def main(args):
 
             models.append(model)
 
+        log.info(f'Using an ensemble of {len(models)} models')
+
     else:
 
         device, gpu_ids = util.get_available_devices()
