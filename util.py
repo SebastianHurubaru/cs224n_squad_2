@@ -70,7 +70,7 @@ class SQuAD(data.Dataset):
             self.context_ner_tags = torch.cat((ones*(args.ner_size-1), self.context_ner_tags), dim=1)
 
             ones = torch.ones((batch_size, 1), dtype=torch.float64)
-            self.context_freqs = torch.cat((ones*(-1), self.context_freqs), dim=1)
+            self.context_freqs = torch.cat((ones, self.context_freqs), dim=1)
 
             zeros = torch.zeros((batch_size, 1, self.context_ques_features.shape[2]), dtype=torch.int64)
             self.context_ques_features = torch.cat((zeros, self.context_ques_features), dim=1)
@@ -158,7 +158,6 @@ def collate_fn(examples):
     context_pos_tags = merge_1d(context_pos_tags)
     context_ner_tags = merge_1d(context_ner_tags, pad_value=-1)
     context_freqs = merge_1d(context_freqs, dtype=torch.float32)
-    context_freqs[:, 0] *= (-0.)
     context_ques_features = merge_2d(context_ques_features, dtype=torch.float32, pad_value=-1)
     y1s = merge_0d(y1s)
     y2s = merge_0d(y2s)

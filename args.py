@@ -143,7 +143,7 @@ def get_train_args():
                         help='Random seed for reproducibility.')
 
     parser.add_argument('--use_ema',
-                        type=bool,
+                        type=lambda s: s.lower().startswith('t'),
                         default=True,
                         help='Use exponential moving average of parameters.')
 
@@ -162,6 +162,9 @@ def get_train_args():
         args.maximize_metric = True
     else:
         raise ValueError(f'Unrecognized metric name: "{args.metric_name}"')
+
+    if not args.optimizer:
+        raise argparse.ArgumentError('Missing required argument --optimizer')
 
     return args
 
@@ -182,6 +185,14 @@ def get_test_args():
                         type=str,
                         default='submission.csv',
                         help='Name for submission file.')
+    parser.add_argument('--use_ensemble',
+                        type=lambda s: s.lower().startswith('t'),
+                        default=False,
+                        help='Whether to use an ensemble of models.')
+    parser.add_argument('--ensemble_models',
+                        type=str,
+                        default='best.pth.tar',
+                        help='Whether to use an ensemble of models.')
 
     # Require load_path for test.py
     args = parser.parse_args()
