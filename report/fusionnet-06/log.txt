@@ -1,0 +1,59 @@
+[03.13.20 13:07:34] Args: {
+    "batch_size": 32,
+    "char_emb_file": "./data/char_emb.json",
+    "concepts_size": 125,
+    "cove_dim": 600,
+    "cove_emb_file": "./data/wmtlstm-b142a7f2.pth",
+    "dev_eval_file": "./data/dev_eval.json",
+    "dev_record_file": "./data/dev.npz",
+    "drop_prob": 0.4,
+    "ema_decay": 0.999,
+    "enc_rnn_layers": 2,
+    "eval_steps": 50000,
+    "glove_dim": 300,
+    "gpu_ids": [
+        0
+    ],
+    "hidden_size": 100,
+    "inf_rnn_layers": 2,
+    "l2_wd": 0,
+    "load_path": null,
+    "lr": 0.002,
+    "max_ans_len": 15,
+    "max_checkpoints": 5,
+    "max_grad_norm": 10.0,
+    "maximize_metric": true,
+    "metric_name": "F1",
+    "model": "fusionnet",
+    "name": "fusionnet",
+    "ner_dim": 8,
+    "ner_size": 20,
+    "num_epochs": 30,
+    "num_features": 3,
+    "num_visuals": 10,
+    "num_workers": 4,
+    "number_of_class": 3,
+    "optimizer": "Adamax",
+    "pos_dim": 12,
+    "pos_size": 57,
+    "save_dir": "./save/train/fusionnet-06",
+    "seed": 224,
+    "test_eval_file": "./data/test_eval.json",
+    "test_record_file": "./data/test.npz",
+    "train_eval_file": "./data/train_eval.json",
+    "train_record_file": "./data/train.npz",
+    "use_squad_v2": true,
+    "word_emb_file": "./data/word_emb.json"
+}
+[03.13.20 13:07:34] Using random seed 224...
+[03.13.20 13:07:34] Loading embeddings...
+[03.13.20 13:07:37] Building model...
+[03.13.20 13:07:40] Saver will maximize F1...
+[03.13.20 13:07:40] Building dataset...
+[03.13.20 13:07:48] Training...
+[03.13.20 13:07:48] Starting epoch 1...
+[03.13.20 13:11:44] Evaluating at step 50016...
+[03.13.20 13:11:56] Saved checkpoint: ./save/train/fusionnet-06/step_50016.pth.tar
+[03.13.20 13:11:56] New best checkpoint at step 50016...
+[03.13.20 13:11:56] Dev NLL: 03.22, F1: 54.78, EM: 52.44, AvNA: 60.28
+[03.13.20 13:11:56] Visualizing in TensorBoard...
