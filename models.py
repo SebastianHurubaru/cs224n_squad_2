@@ -451,18 +451,55 @@ class FusionNet(nn.Module):
         # \sum_i \beta_i U_q_{i), where \beta_i is proportional to \exp(w^T u_i^Q) and w is a trainable vector
 
         u_q = self.summarized_final_ques(None, U_q, q_mask)
+            # size: torch.Size([batch_size, max nb of words question, attention_hidden_size])
 
         # The span start P_s is computed using the summarized question understanding vector u_q
         # [Need to explain how it is computed by checking the code in layers.py]
         # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
         P_s = self.span_start(u_q, U_c, c_mask)
+                # size: torch.Size([batch_size, max nb of words question])
+
+        # Computation of v_q:
+        # To use the information of the span start, when we attend for the span end, we combine the context
+        # understanding vector for the span start with u_q through a FRU (Cho et al., 2014)
+        # v_q  = GRU (u_q, \sum_i P_S_{i} u_c_{i}), where u_q is taken as teh memory and \sum_i P_s_{i} i_c_{i} as the
+        # input of the GRU:
+
+        # Note: attention  attention_hidden_size is defined to be 250 on page 6 of FusionNet article.
+        #  U_c has dimension: torch.Size([batch_size, nb words context, attention_hidden_size])
+        #  U_c.transpose(1, 2) has dimension: torch.Size([batch_size,  attention_hidden_size, nb words context])
+        #  P_s has dimension: torch.Size([batch_size, max nb of words question])
+        #  torch.exp(P_s.unsqueeze(-1)) has dimension: torch.Size([batch_size, max nb of words question, 1])
+        #  > unsqueeze(-1) create a new dimension at the end of the tensor with value 1
+        # U_c.transpose(1, 2).bmm(torch.exp(P_s.unsqueeze(-1))) has dimension:
+        #                                   torch.Size([batch_size, attention_hidden_size, 1])
+        # > Batch Matrix Multiplication using bmm
+        # > we multiply two tensors of size (batch_size,  attention_hidden_size, nb words context) and  of size
+        # (batch_size, max nb of words question, 1)
+        # > The matrix multiplicaton is done between the last dimension of the first matrix (nb words context) and the
+        # dimension before the last dimension of the second matrix (nb words context). Thus giving a matrix of size:
+        # (batch_size,  attention_hidden_size, 1)
 
         combine = U_c.transpose(1, 2).bmm(torch.exp(P_s.unsqueeze(-1))).squeeze(-1)
+            # torch.Size([batch_size,  attention_hidden_size, 1])
 
+        # Applying dropout to combine
         combine = F.dropout(combine, self.args.drop_prob, self.training)
+            # torch.Size([batch_size,  attention_hidden_size, 1])
+
+        # Compute a GRU using the parameters (i) combine.unsqueeze(1) with dimension
+        # torch.Size([batch_size, 1, attention_hidden_size])  and (ii) u_q.unsqueeze(0) with dimension
+        # torch.Size([1, batch_size, attention_hidden_size])
         self.combine_context_span_start_ques_under.flatten_parameters()
         v_q, _ = self.combine_context_span_start_ques_under(combine.unsqueeze(1), u_q.unsqueeze(0))
+            # size: torch.Size([batch_size, 1, attention_hidden_size])
 
+
+        # Span end P_e is computed by calling layers.LinearSelfAttention with parameters:
+        # v_q.squeeze(1) with size: torch.Size([batch_size, attention_hidden_size])
+        # U_c with size: torch.Size([batch_size, max nb of words question, attention_hidden_size])
+        # c_mask with size: torch.Size([batch_size, max nb of words question])
         P_e = self.span_end(v_q.squeeze(1), U_c, c_mask)
+            # size: torch.Size([batch_size, max nb of words question])
 
         return P_s, P_e
