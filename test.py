@@ -42,34 +42,45 @@ def main(args):
     log.info('Loading embeddings...')
     word_vectors = util.torch_from_json(args.word_emb_file)
 
-    models = []
+
+    models = {}
+
     if args.use_ensemble:
 
-        for model_file in glob.glob(f'{args.load_path}/{args.model}-*/{args.ensemble_models}'):
+        total_models = 0
+        for model_name in ['bidaf', 'bidafextra', 'fusionnet']:
 
-            # Get model
-            log.info('Building model...')
-            if args.model == 'bidaf':
-                model = BiDAF(word_vectors=word_vectors,
-                              hidden_size=args.hidden_size)
-            elif args.model == 'bidafextra':
-                model = BiDAFExtra(word_vectors=word_vectors,
-                                   args=args)
-            elif args.model == 'fusionnet':
-                model = FusionNet(word_vectors=word_vectors,
-                                  args=args)
+            models_list = []
 
-            model = nn.DataParallel(model, gpu_ids)
-            log.info(f'Loading checkpoint from {model_file}...')
-            model = util.load_model(model, model_file, gpu_ids, return_step=False)
+            for model_file in glob.glob(f'{args.load_path}/{model_name}-*/{args.ensemble_models}'):
 
-            # Load each model on CPU (have plenty of RAM ...)
-            model = model.cpu()
-            model.eval()
+                # Get model
+                log.info('Building model...')
+                if model_name == 'bidaf':
+                    model = BiDAF(word_vectors=word_vectors,
+                                  hidden_size=args.hidden_size)
+                elif model_name == 'bidafextra':
+                    model = BiDAFExtra(word_vectors=word_vectors,
+                                       args=args)
+                elif model_name == 'fusionnet':
+                    model = FusionNet(word_vectors=word_vectors,
+                                      args=args)
 
-            models.append(model)
+                model = nn.DataParallel(model, gpu_ids)
+                log.info(f'Loading checkpoint from {model_file}...')
+                model = util.load_model(model, model_file, gpu_ids, return_step=False)
 
-        log.info(f'Using an ensemble of {len(models)} models')
+                # Load each model on CPU (have plenty of RAM ...)
+                model = model.cpu()
+                model.eval()
+
+                models_list.append(model)
+
+            models[model_name] = models_list
+
+            total_models += len(models_list)
+
+        log.info(f'Using an ensemble of {total_models} models')
 
     else:
 
@@ -93,8 +104,7 @@ def main(args):
         model = model.to(device)
         model.eval()
 
-        models.append()
-
+        models[args.model] = [model]
 
 
     # Get data loader
@@ -126,30 +136,30 @@ def main(args):
             p1s = []
             p2s = []
 
-            for model in models:
+            for model_name in models:
+                for model in models[model_name]:
+                    # Move model to GPU to evaluate
+                    model = model.to(device)
 
-                # Move model to GPU to evaluate
-                model = model.to(device)
+                    # Forward
+                    if model_name == 'bidaf':
+                        log_p1, log_p2 = model.to(device)(cw_idxs, qw_idxs)
+                    else:
+                        log_p1, log_p2 = model.to(device)(cw_idxs, qw_idxs, cw_pos, cw_ner, cw_freq, cqw_extra)
 
-                # Forward
-                if args.model == 'bidaf':
-                    log_p1, log_p2 = model.to(device)(cw_idxs, qw_idxs)
-                else:
-                    log_p1, log_p2 = model.to(device)(cw_idxs, qw_idxs, cw_pos, cw_ner, cw_freq, cqw_extra)
+                    log_p1, log_p2 = log_p1.cpu(), log_p2.cpu()
 
-                log_p1, log_p2 = log_p1.cpu(), log_p2.cpu()
+                    if not args.use_ensemble:
+                        y1, y2 = y1.to(device), y2.to(device)
+                        loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
+                        nll_meter.update(loss.item(), batch_size)
 
-                if not args.use_ensemble:
-                    y1, y2 = y1.to(device), y2.to(device)
-                    loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
-                    nll_meter.update(loss.item(), batch_size)
+                    # Move model back to CPU to release GPU memory
+                    model = model.cpu()
 
-                # Move model back to CPU to release GPU memory
-                model = model.cpu()
-
-                # Get F1 and EM scores
-                p1, p2 = log_p1.exp().unsqueeze(-1).cpu(), log_p2.exp().unsqueeze(-1).cpu()
-                p1s.append(p1), p2s.append(p2)
+                    # Get F1 and EM scores
+                    p1, p2 = log_p1.exp().unsqueeze(-1).cpu(), log_p2.exp().unsqueeze(-1).cpu()
+                    p1s.append(p1), p2s.append(p2)
 
             best_ps = torch.max(torch.cat([torch.cat(p1s, -1).unsqueeze(-1), torch.cat(p2s, -1).unsqueeze(-1)], -1), -2)[0]
 
