@@ -151,6 +151,8 @@ def main(args):
 
                     if not args.use_ensemble:
                         y1, y2 = y1.to(device), y2.to(device)
+                        log_p1, log_p2 = log_p1.to(device), log_p2.to(device)
+
                         loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
                         nll_meter.update(loss.item(), batch_size)
 
