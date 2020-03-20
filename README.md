@@ -23,3 +23,7 @@
     3. To train the baseline, use `python train.py --model bidaf  --name baseline --num_workers 0`
     4. To train the bidafextra model, use `python train.py --model bidafextra  --name bidafextra --num_workers 0`
     5. To train the FusionNet model, use `python train.py --model fusionnet  --name fusionnet --num_workers 0`
+    
+6. To generate the file required to be uploaded to the leaderboard, it is necessary to use the following command:
+`python test.py --split dev --name fusionnet  --num_workers=0 --batch_size=64 --model fusionnet --load_path ./save/train/fusionnet-03/best.pth.tar`
+
