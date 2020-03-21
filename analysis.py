@@ -18,6 +18,11 @@ import torch.nn.functional as F
 import torch.utils.data as data
 import util
 from collections import defaultdict
+import matplotlib.pyplot as plt
+from matplotlib import cm
+import numpy as np
+import matplotlib
+
 
 from args import get_test_args
 from collections import OrderedDict
@@ -31,11 +36,133 @@ from util import collate_fn, SQuAD
 from collections import OrderedDict
 
 
+
 def find_first_interrogative_pronoun(list_of_interrogative_pronouns, list_of_words_question):
     for word_question in list_of_words_question:
         if word_question in list_of_interrogative_pronouns:
             return word_question
     return ""
+
+def heatmap(data, row_labels, col_labels, ax=None,
+            cbar_kw={}, cbarlabel="", **kwargs):
+    """
+    Create a heatmap from a numpy array and two lists of labels.
+
+    Parameters
+    ----------
+    data
+        A 2D numpy array of shape (N, M).
+    row_labels
+        A list or array of length N with the labels for the rows.
+    col_labels
+        A list or array of length M with the labels for the columns.
+    ax
+        A `matplotlib.axes.Axes` instance to which the heatmap is plotted.  If
+        not provided, use current axes or create a new one.  Optional.
+    cbar_kw
+        A dictionary with arguments to `matplotlib.Figure.colorbar`.  Optional.
+    cbarlabel
+        The label for the colorbar.  Optional.
+    **kwargs
+        All other arguments are forwarded to `imshow`.
+    """
+
+    if not ax:
+        ax = plt.gca()
+
+    # Plot the heatmap
+    im = ax.imshow(data, **kwargs)
+
+    # Create colorbar
+    cbar = ax.figure.colorbar(im, ax=ax, **cbar_kw)
+    cbar.ax.set_ylabel(cbarlabel, rotation=-90, va="bottom")
+
+    # We want to show all ticks...
+    ax.set_xticks(np.arange(data.shape[1]))
+    ax.set_yticks(np.arange(data.shape[0]))
+    # ... and label them with the respective list entries.
+    ax.set_xticklabels(col_labels)
+    ax.set_yticklabels(row_labels)
+
+    # Let the horizontal axes labeling appear on top.
+    ax.tick_params(top=True, bottom=False,
+                   labeltop=True, labelbottom=False)
+
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=-30, ha="right",
+             rotation_mode="anchor")
+
+    # Turn spines off and create white grid.
+    for edge, spine in ax.spines.items():
+        spine.set_visible(False)
+
+    ax.set_xticks(np.arange(data.shape[1]+1)-.5, minor=True)
+    ax.set_yticks(np.arange(data.shape[0]+1)-.5, minor=True)
+    ax.grid(which="minor", color="w", linestyle='-', linewidth=3)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+    return im, cbar
+
+
+def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
+                     textcolors=["black", "white"],
+                     threshold=None, **textkw):
+    """
+    A function to annotate a heatmap.
+
+    Parameters
+    ----------
+    im
+        The AxesImage to be labeled.
+    data
+        Data used to annotate.  If None, the image's data is used.  Optional.
+    valfmt
+        The format of the annotations inside the heatmap.  This should either
+        use the string format method, e.g. "$ {x:.2f}", or be a
+        `matplotlib.ticker.Formatter`.  Optional.
+    textcolors
+        A list or array of two color specifications.  The first is used for
+        values below a threshold, the second for those above.  Optional.
+    threshold
+        Value in data units according to which the colors from textcolors are
+        applied.  If None (the default) uses the middle of the colormap as
+        separation.  Optional.
+    **kwargs
+        All other arguments are forwarded to each call to `text` used to create
+        the text labels.
+    """
+
+    if not isinstance(data, (list, np.ndarray)):
+        data = im.get_array()
+
+    # Normalize the threshold to the images color range.
+    if threshold is not None:
+        threshold = im.norm(threshold)
+    else:
+        threshold = im.norm(data.max())/2.
+
+    # Set default alignment to center, but allow it to be
+    # overwritten by textkw.
+    kw = dict(horizontalalignment="center",
+              verticalalignment="center")
+    kw.update(textkw)
+
+    # Get the formatter in case a string is supplied
+    if isinstance(valfmt, str):
+        valfmt = matplotlib.ticker.StrMethodFormatter(valfmt)
+
+    # Loop over the data and create a `Text` for each "pixel".
+    # Change the text's color depending on the data.
+    texts = []
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            kw.update(color=textcolors[int(im.norm(data[i, j]) > threshold)])
+            text = im.axes.text(j, i, valfmt(data[i, j], None), **kw)
+            texts.append(text)
+
+    return texts
+
+
 
 
 def main(args):
@@ -111,12 +238,12 @@ def main(args):
         # possibly indicating the position of the interrogative pronoun in the sentence.
         question_lower_case = gold_dict[str(index)]['question'].lower()
 
-        list_question_lower_case_with_punctuation = question_lower_case.split()
+        list_question_lower_case_with_punctuation = question_lower_case.translate({ord(i): " " for i in "'"}).split()
 
         #
         question_lower_case = []
         for item in list_question_lower_case_with_punctuation:
-            question_lower_case.append(item.translate({ord(i): None for i in ",.<>!@£$%^&*()_-+=?'"}))
+            question_lower_case.append(item.translate({ord(i): "" for i in ",.<>!@£$%^&*()_-+=?"}))
 
 
         # defining a variable for the first word
@@ -163,6 +290,7 @@ def main(args):
             pronoun = find_first_interrogative_pronoun(list_of_interrogative_pronouns, question_lower_case)
             #if pronoun =="":
             #    print(">>", question_lower_case)
+            #    print("@@@", gold_dict[str(index)]['question'])
             count_questions_type[pronoun] += 1
             audit_trail_from_question_type[pronoun].append(str(index))
             # if pronoun =="":
@@ -177,10 +305,11 @@ def main(args):
 
     reverse_dict_by_value = OrderedDict(sorted(count_questions_type.items(), key=lambda x: x[1]))
     # print(count_questions_type)
+    total_questions = sum(count_questions_type.values())
     # print(reverse_dict)
     #for k, v in reverse_dict_by_value.items():
-    #   print( "%s: %s" % (k, v))
-    print(audit_trail_from_question_type)
+    #   print( "%s: %s and in percentage: %s" % (k, v, 100*v/total_questions))
+    #print(audit_trail_from_question_type)
     # exit()
     with torch.no_grad(), \
          tqdm(total=len(dataset)) as progress_bar:
@@ -227,6 +356,144 @@ def main(args):
         if args.use_squad_v2:
             results_list.append(('AvNA', results['AvNA']))
         results = OrderedDict(results_list)
+
+        # Computing the F1 score for each type of question
+        #
+        #    audit_trail_from_question_type[pronoun].append(str(index))
+
+        # create a list of the types of questions by extracting the keys from the dict audit_trail_from_question_type
+        types_of_questions = list(audit_trail_from_question_type.keys())
+
+        gold_dict_per_type_of_questions = defaultdict(lambda: [])
+        pred_dict_per_type_of_questions = defaultdict(lambda: [])
+
+        gold_dict_per_type_of_questions_start = defaultdict(lambda: [])
+        pred_dict_per_type_of_questions_start = defaultdict(lambda: [])
+
+        gold_dict_per_type_of_questions_middle = defaultdict(lambda: [])
+        pred_dict_per_type_of_questions_middle = defaultdict(lambda: [])
+
+        gold_dict_per_type_of_questions_end = defaultdict(lambda: [])
+        pred_dict_per_type_of_questions_end = defaultdict(lambda: [])
+
+        for type_of_questions in types_of_questions:
+            #gold_pred = {key: value for key, value in gold_dict.items() if key in audit_trail_from_question_type[type_of_questions]}
+            #lst_pred = {key: value for key, value in pred_dict.items() if key in audit_trail_from_question_type[type_of_questions]}
+
+            # Create two dictionnaries for each type of sentence for gold_dict_per_type_of_questions and pred_dict_per_type_of_questions
+            gold_dict_per_type_of_questions[type_of_questions] = {key: value for key, value in gold_dict.items() if key in audit_trail_from_question_type[type_of_questions]}
+            pred_dict_per_type_of_questions[type_of_questions] = {key: value for key, value in pred_dict.items() if key in audit_trail_from_question_type[type_of_questions]}
+            #print(type_of_questions," F1 score: ", util.eval_dicts(gold_dict_per_type_of_questions[type_of_questions], pred_dict_per_type_of_questions[type_of_questions], args.use_squad_v2)['F1'])
+
+
+
+
+
+            for key, value in pred_dict.items():
+                """"
+                if key in audit_trail_from_question_type[type_of_questions] and type_of_questions != "":
+                    #print("type_of_questions: ",type_of_questions)
+                    print("key: ", key)
+                    print("value: ", value)
+                    #sub_index = value["question"].lower().find(type_of_questions)
+                    #print("sub_index: ",sub_index)
+                    #test_fc = value["question"].lower().find(type_of_questions)
+                    #print("present type of the var: ",type(test_fc))
+                    #print("question: ", question_lower_case[str(key)])
+                    #print("length of the question: ",question_lower_case)
+                    #print('Position of the interrogative pronoun in the question:', )
+            # Create two dictionnaries for each type of sentence based at the start of the sentence
+
+                    if value["question"].lower().find(type_of_questions) == 1 or value["question"].lower().find(type_of_questions) == 1:
+                        gold_dict_per_type_of_questions_start[type_of_questions].update( {key : value} )
+                        print("BEGINNING")
+                    elif value["question"].lower().find(type_of_questions) >= len(value["question"])-len(type_of_questions)-5:
+                        print("END")
+                    else:
+                        print("MIDDLE")
+            """
+            if  type_of_questions != "":
+                gold_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in gold_dict.items() if (key in audit_trail_from_question_type[type_of_questions] \
+                                                                        and (value["question"].lower().find(type_of_questions) <= 1)) }
+
+
+
+                pred_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in pred_dict.items() if key in list(gold_dict_per_type_of_questions_start[type_of_questions].keys()) }
+
+                # Create two dictionnaries for each type of sentence based at the end of the sentence
+                gold_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in gold_dict.items() if key in audit_trail_from_question_type[type_of_questions] \
+                                                                        and value["question"].lower().find(type_of_questions) >= len(value["question"])-len(type_of_questions)-5 }
+
+
+                pred_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in pred_dict.items() if key in list(gold_dict_per_type_of_questions_start[type_of_questions].keys()) }
+
+                # Create two dictionnaries for each type of sentence based at the middle of the sentencecount_questions_type
+                gold_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in gold_dict.items() if key not in list(gold_dict_per_type_of_questions_start[type_of_questions].keys()) \
+                                                                            and key not in list(gold_dict_per_type_of_questions_end[type_of_questions].keys())}
+
+                pred_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in pred_dict.items() if key not in list(gold_dict_per_type_of_questions_start[type_of_questions].keys()) \
+                                                                            and key not in list(gold_dict_per_type_of_questions_end[type_of_questions].keys())}
+
+        """"
+        # draw a pie chart
+        # Data to plot
+        #labels = 'Python', 'C++', 'Ruby', 'Java'
+        types_of_questions[types_of_questions.index('')] = 'Question without interrogative pronoun'
+
+        labels = tuple(types_of_questions)
+        #sizes = [215, 130, 245, 210]
+        sizes = [count_questions_type[type_of_questions] for type_of_questions in labels]
+
+
+        #colors = ['gold', 'yellowgreen', 'lightcoral', 'lightskyblue']
+
+        colors = cm.Set1(np.arange(40) / 40.)
+        explode = (0, 0, 0, 0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0)  # explode 1st slice
+        cmap = get_cmap(len(sizes))
+        # Plot
+        fig1, ax1 = plt.subplots()
+        ax1.pie(sizes, colors=colors, labels=labels, autopct='%1.1f%%', startangle=90)  # draw circle
+        centre_circle = plt.Circle((0, 0), 0.70, fc='white')
+        fig = plt.gcf()
+        fig.gca().add_artist(centre_circle)  # Equal aspect ratio ensures that pie is drawn as a circle
+        #plt.pie(sizes, explode=explode, labels=labels, colors=colors_cs,
+        #        autopct='%1.1f%%', shadow=True, startangle=140)
+        patches, texts = plt.pie(sizes,  shadow=True, startangle=90)
+        plt.legend(patches, labels, loc="best")
+        plt.axis('equal')
+        plt.tight_layout()
+        plt.show()
+
+        # Pie chart
+        #labels = ['Frogs', 'Hogs', 'Dogs', 'Logs']
+        #sizes = [15, 30, 45, 10]  # colors
+        #colors = ['#ff9999', '#66b3ff', '#99ff99', '#ffcc99']
+
+        #fig1, ax1 = plt.subplots()
+        #ax1.pie(sizes, colors=colors, labels=labels, autopct='%1.1f%%', startangle=90)  # draw circle
+        #centre_circle = plt.Circle((0, 0), 0.70, fc='white')
+        #fig = plt.gcf()
+        #fig.gca().add_artist(centre_circle)  # Equal aspect ratio ensures that pie is drawn as a circle
+        #ax1.axis('equal')
+        #plt.tight_layout()
+        #plt.show()
+        """
+        positions_in_question = ["beginning", "middle", "end"]
+
+        F1 = np.array([[0, 0, 0, 0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0],
+                            [0, 0, 0, 0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0],
+                            [0, 0, 0, 0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0]])
+
+        fig, ax = plt.subplots()
+
+        types_of_questions[types_of_questions.index("")] = "Implicit question without interrogative pronoun"
+
+        im, cbar = heatmap(F1, positions_in_question, types_of_questions, ax=ax,
+                           cmap="YlGn", cbarlabel="F1 scores")
+        texts = annotate_heatmap(im, valfmt="{x:.1f}")
+
+        fig.tight_layout()
+        plt.show()
 
         # Log to console
         results_str = ', '.join(f'{k}: {v:05.2f}' for k, v in results.items())
