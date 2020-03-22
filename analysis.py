@@ -45,7 +45,7 @@ def find_first_interrogative_pronoun(list_of_interrogative_pronouns, list_of_wor
     return ""
 
 def heatmap(data, row_labels, col_labels, ax=None,
-            cbar_kw={}, cbarlabel="", **kwargs):
+            cbar_kw={}, cbarlabel="", ignore=None, **kwargs):
     """
     Create a heatmap from a numpy array and two lists of labels.
 
@@ -67,6 +67,21 @@ def heatmap(data, row_labels, col_labels, ax=None,
     **kwargs
         All other arguments are forwarded to `imshow`.
     """
+
+    #print("data: ", data)
+    #print("type(data): ", type(data))
+    original_data =  copy.deepcopy(data)
+    #print("original_data: ", original_data)
+    #print("type(original_data): ", type(original_data))
+    average_to_replace_NA = np.array([i for i in original_data.flatten() if i != "NA"]).astype(np.float).mean()
+
+    data[data == "NA"] = average_to_replace_NA
+    data = np.float32(data)
+    #print("After removing NA")
+    #print("data: ", data)
+    #print("type(data): ", type(data))
+
+    #data = data.tolist()
 
     if not ax:
         ax = plt.gca()
@@ -105,9 +120,9 @@ def heatmap(data, row_labels, col_labels, ax=None,
     return im, cbar
 
 
-def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
+def annotate_heatmap(im, data=None, valfmt="{x:.1f}",
                      textcolors=["black", "white"],
-                     threshold=None, **textkw):
+                     threshold=None, ignore=None, **textkw):
     """
     A function to annotate a heatmap.
 
@@ -132,9 +147,27 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
         All other arguments are forwarded to each call to `text` used to create
         the text labels.
     """
+    SMALL_SIZE = 8
+    MEDIUM_SIZE = 10
+    BIGGER_SIZE = 12
 
     if not isinstance(data, (list, np.ndarray)):
         data = im.get_array()
+
+
+    # deal with the case of absent value:
+    copied_data = copy.deepcopy(data)
+    print("copied_data: ", copied_data)
+
+    # print("original_data: ", original_data)
+    # print("type(original_data): ", type(original_data))
+    average_to_replace_NA = np.array([i for i in copied_data.flatten() if i != "NA" and i != ""]).astype(np.float).mean()
+
+    data[data == "NA"] = average_to_replace_NA
+    data[data == ""] = average_to_replace_NA
+    data[data == 0] = average_to_replace_NA
+    data = np.float32(data)
+
 
     # Normalize the threshold to the images color range.
     if threshold is not None:
@@ -154,12 +187,20 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
 
     # Loop over the data and create a `Text` for each "pixel".
     # Change the text's color depending on the data.
+    plt.rc('axes', titlesize=7)  # fontsize of the axes title
     texts = []
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
-            kw.update(color=textcolors[int(im.norm(data[i, j]) > threshold)])
-            text = im.axes.text(j, i, valfmt(data[i, j], None), **kw)
-            texts.append(text)
+            if ignore != None:
+                if (i,j) not in ignore:
+                    print("(i,j):", (i,j), " is in ignore: ", (i,j) not in ignore)
+                    kw.update(color=textcolors[int(im.norm(data[i, j]) > threshold)])
+                    text = im.axes.text(j, i, valfmt(data[i, j], None), **kw, fontsize=7)
+                    texts.append(text)
+            else:
+                kw.update(color=textcolors[int(im.norm(data[i, j]) > threshold)])
+                text = im.axes.text(j, i, valfmt(data[i, j], None), **kw, fontsize=7)
+                texts.append(text)
 
     return texts
 
@@ -352,7 +393,7 @@ def main(args):
     if args.split != 'test':
         results = util.eval_dicts(gold_dict, pred_dict, args.use_squad_v2)
 
-        # extra-test by Francois
+        # Printing information for questions without interrogative pronouns
         """"
         print("len(gold_dict): ", len(gold_dict))
         print("len(pred_dict): ", len(pred_dict))
@@ -395,7 +436,7 @@ def main(args):
             # Create two dictionnaries for each type of sentence for gold_dict_per_type_of_questions and pred_dict_per_type_of_questions
             gold_dict_per_type_of_questions[type_of_questions] = {key: value for key, value in gold_dict.items() if key in audit_trail_from_question_type[type_of_questions] and key in pred_dict.keys()}
             pred_dict_per_type_of_questions[type_of_questions] = {key: value for key, value in pred_dict.items() if key in audit_trail_from_question_type[type_of_questions] and key in pred_dict.keys()}
-            print(type_of_questions," F1 score: ", util.eval_dicts(gold_dict_per_type_of_questions[type_of_questions], pred_dict_per_type_of_questions[type_of_questions], args.use_squad_v2)['F1'])
+            # print(type_of_questions," F1 score: ", util.eval_dicts(gold_dict_per_type_of_questions[type_of_questions], pred_dict_per_type_of_questions[type_of_questions], args.use_squad_v2)['F1'])
 
             gold_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in gold_dict.items() if key in audit_trail_from_question_type[type_of_questions] and key in pred_dict.keys()}
             pred_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in pred_dict.items() if key in audit_trail_from_question_type[type_of_questions] and key in pred_dict.keys()}
@@ -548,7 +589,7 @@ def main(args):
 
         positions_in_question = ["beginning", "middle", "end"]
 
-        print(type_of_questions," F1 score: ", util.eval_dicts(gold_dict_per_type_of_questions[type_of_questions], pred_dict_per_type_of_questions[type_of_questions], args.use_squad_v2)['F1'])
+        # print(type_of_questions," F1 score: ", util.eval_dicts(gold_dict_per_type_of_questions[type_of_questions], pred_dict_per_type_of_questions[type_of_questions], args.use_squad_v2)['F1'])
 
         list_beginning = [util.eval_dicts(gold_dict_per_type_of_questions_start[type_of_questions], pred_dict_per_type_of_questions_start[type_of_questions], args.use_squad_v2)['F1']  for type_of_questions in types_of_questions]
         list_middle = [util.eval_dicts(gold_dict_per_type_of_questions_middle[type_of_questions], pred_dict_per_type_of_questions_middle[type_of_questions], args.use_squad_v2)['F1']  for type_of_questions in types_of_questions]
@@ -562,21 +603,49 @@ def main(args):
                         list_middle,
                         list_end])
 
+        m, n = F1.shape
 
+        value_to_ignore = []
+        for i in range(m):
+            for j in range(n):
+                if F1[i,j]=="NA" or F1[i,j]==0:
+                    value_to_ignore.append((i,j))
+        print("value to ignore: ", value_to_ignore)
         #F1 = np.array([[0, 0, 0, 0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0],
         #                    [0, 0, 0, 0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0],
         #                    [0, 0, 0, 0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0]])
+
+        data_label = copy.deepcopy(F1)
+
+        for row in data_label:
+            for column_idx in range(len(row)):
+                if row[column_idx] == "NA":
+                    row[column_idx] = ""
+
+
+        # print question without interrogative pronoun required for the second part of the analysis:
+        for key, value in gold_dict.items():
+            if key in audit_trail_from_question_type[""] and key in pred_dict.keys():
+                print("question: ", gold_dict_per_type_of_questions[''])
+                print("golden answers: ", )
+                print("prediction: ", pred_dict[key])
+                print()
 
         fig, ax = plt.subplots()
 
         types_of_questions[types_of_questions.index("")] = "Implicit question without interrogative pronoun"
 
-        im, cbar = heatmap(F1, positions_in_question, types_of_questions, ax=ax,
-                           cmap="YlGn", cbarlabel="F1 scores")
-        texts = annotate_heatmap(im, valfmt="{x:.1f}")
+        im, cbar = heatmap(F1, positions_in_question, types_of_questions, ax=ax, \
+                            cmap="YlGn", cbarlabel="F1 scores")
+
+
+        texts = annotate_heatmap(im, data= data_label, valfmt="{x:.1f}", ignore = value_to_ignore)
 
         fig.tight_layout()
         plt.show()
+
+
+
 
         # Log to console
         results_str = ', '.join(f'{k}: {v:05.2f}' for k, v in results.items())
