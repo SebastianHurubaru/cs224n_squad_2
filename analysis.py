@@ -17,6 +17,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data as data
 import util
+import copy
 from collections import defaultdict
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -350,6 +351,17 @@ def main(args):
     # Log results (except for test set, since it does not come with labels)
     if args.split != 'test':
         results = util.eval_dicts(gold_dict, pred_dict, args.use_squad_v2)
+
+        # extra-test by Francois
+        """"
+        print("len(gold_dict): ", len(gold_dict))
+        print("len(pred_dict): ", len(pred_dict))
+        print("Is gold_dict.keys() identical to pred_dict.keys(): ", gold_dict.keys()==pred_dict.keys())
+        if gold_dict.keys()!=pred_dict.keys():
+            for key in gold_dict.keys():
+                if key not in pred_dict.keys():
+                    print("key ", key, " missing in pred_dict.keys(")
+        """
         results_list = [('NLL', nll_meter.avg),
                         ('F1', results['F1']),
                         ('EM', results['EM'])]
@@ -365,124 +377,195 @@ def main(args):
         types_of_questions = list(audit_trail_from_question_type.keys())
 
         gold_dict_per_type_of_questions = defaultdict(lambda: [])
-        pred_dict_per_type_of_questions = defaultdict(lambda: [])
+        pred_dict_per_type_of_questions = {}
 
-        gold_dict_per_type_of_questions_start = defaultdict(lambda: [])
-        pred_dict_per_type_of_questions_start = defaultdict(lambda: [])
+        gold_dict_per_type_of_questions_start = {}
+        pred_dict_per_type_of_questions_start = {}
 
-        gold_dict_per_type_of_questions_middle = defaultdict(lambda: [])
-        pred_dict_per_type_of_questions_middle = defaultdict(lambda: [])
+        gold_dict_per_type_of_questions_middle = {}
+        pred_dict_per_type_of_questions_middle = {}
 
-        gold_dict_per_type_of_questions_end = defaultdict(lambda: [])
-        pred_dict_per_type_of_questions_end = defaultdict(lambda: [])
+        gold_dict_per_type_of_questions_end = {}
+        pred_dict_per_type_of_questions_end = {}
 
         for type_of_questions in types_of_questions:
             #gold_pred = {key: value for key, value in gold_dict.items() if key in audit_trail_from_question_type[type_of_questions]}
             #lst_pred = {key: value for key, value in pred_dict.items() if key in audit_trail_from_question_type[type_of_questions]}
 
             # Create two dictionnaries for each type of sentence for gold_dict_per_type_of_questions and pred_dict_per_type_of_questions
-            gold_dict_per_type_of_questions[type_of_questions] = {key: value for key, value in gold_dict.items() if key in audit_trail_from_question_type[type_of_questions]}
-            pred_dict_per_type_of_questions[type_of_questions] = {key: value for key, value in pred_dict.items() if key in audit_trail_from_question_type[type_of_questions]}
-            #print(type_of_questions," F1 score: ", util.eval_dicts(gold_dict_per_type_of_questions[type_of_questions], pred_dict_per_type_of_questions[type_of_questions], args.use_squad_v2)['F1'])
+            gold_dict_per_type_of_questions[type_of_questions] = {key: value for key, value in gold_dict.items() if key in audit_trail_from_question_type[type_of_questions] and key in pred_dict.keys()}
+            pred_dict_per_type_of_questions[type_of_questions] = {key: value for key, value in pred_dict.items() if key in audit_trail_from_question_type[type_of_questions] and key in pred_dict.keys()}
+            print(type_of_questions," F1 score: ", util.eval_dicts(gold_dict_per_type_of_questions[type_of_questions], pred_dict_per_type_of_questions[type_of_questions], args.use_squad_v2)['F1'])
+
+            gold_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in gold_dict.items() if key in audit_trail_from_question_type[type_of_questions] and key in pred_dict.keys()}
+            pred_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in pred_dict.items() if key in audit_trail_from_question_type[type_of_questions] and key in pred_dict.keys()}
+
+            gold_dict_per_type_of_questions_middle[type_of_questions] = {key: value for key, value in gold_dict.items() if key in audit_trail_from_question_type[type_of_questions] and key in pred_dict.keys()}
+            pred_dict_per_type_of_questions_middle[type_of_questions] = {key: value for key, value in pred_dict.items() if key in audit_trail_from_question_type[type_of_questions] and key in pred_dict.keys()}
+
+            gold_dict_per_type_of_questions_end[type_of_questions] = {key: value for key, value in gold_dict.items() if key in audit_trail_from_question_type[type_of_questions] and key in pred_dict.keys()}
+            pred_dict_per_type_of_questions_end[type_of_questions] = {key: value for key, value in pred_dict.items() if key in audit_trail_from_question_type[type_of_questions] and key in pred_dict.keys()}
 
 
-
-
-
-            for key, value in pred_dict.items():
-                """"
-                if key in audit_trail_from_question_type[type_of_questions] and type_of_questions != "":
-                    #print("type_of_questions: ",type_of_questions)
+            for key, value in gold_dict.items():
+                #if key in audit_trail_from_question_type[type_of_questions] and key in pred_dict.keys():
+                if key in audit_trail_from_question_type[type_of_questions] and type_of_questions != "" and key in pred_dict_per_type_of_questions[type_of_questions]:
+                    """
+                    print("type_of_questions: ",type_of_questions)
                     print("key: ", key)
-                    print("value: ", value)
-                    #sub_index = value["question"].lower().find(type_of_questions)
-                    #print("sub_index: ",sub_index)
-                    #test_fc = value["question"].lower().find(type_of_questions)
-                    #print("present type of the var: ",type(test_fc))
-                    #print("question: ", question_lower_case[str(key)])
-                    #print("length of the question: ",question_lower_case)
-                    #print('Position of the interrogative pronoun in the question:', )
+                    print("question: ", value["question"])
+                    sub_index = value["question"].lower().find(type_of_questions)
+                    print("sub_index: ",sub_index)
+                    test_fc = value["question"].lower().find(type_of_questions)
+                    print("present type of the var: ",type(test_fc))
+                    #print("question: ", value["question"][str(key)])
+                    print("length of the question: ", len(value["question"]))
+                    print('Position of the interrogative pronoun in the question:', )
+                    """
             # Create two dictionnaries for each type of sentence based at the start of the sentence
 
-                    if value["question"].lower().find(type_of_questions) == 1 or value["question"].lower().find(type_of_questions) == 1:
-                        gold_dict_per_type_of_questions_start[type_of_questions].update( {key : value} )
-                        print("BEGINNING")
+                    if value["question"].lower().find(type_of_questions) == 1 or value["question"].lower().find(type_of_questions) == 0:
+                        #print("BEGINNING")
+                        if type_of_questions != "":
+                            try:
+                                del gold_dict_per_type_of_questions_middle[type_of_questions][key]
+                            except KeyError:
+                                pass
+
+                            try:
+                                del pred_dict_per_type_of_questions_middle[type_of_questions][key]
+                            except KeyError:
+                                pass
+
+                            try:
+                                del gold_dict_per_type_of_questions_end[type_of_questions][key]
+                            except KeyError:
+                                pass
+
+                            try:
+                                del pred_dict_per_type_of_questions_end[type_of_questions][key]
+                            except KeyError:
+                                pass
+
+                        #pred_dict_per_type_of_questions_start[type_of_questions] = {key: pred_dict[key] for key in
+                        #                                                            gold_dict_per_type_of_questions_start[
+                        #                                                                type_of_questions].keys()}
                     elif value["question"].lower().find(type_of_questions) >= len(value["question"])-len(type_of_questions)-5:
-                        print("END")
+                        #print("END")
+
+                        if type_of_questions != "":
+                            try:
+                                del gold_dict_per_type_of_questions_middle[type_of_questions][key]
+                            except KeyError:
+                                pass
+
+                            try:
+                                del pred_dict_per_type_of_questions_middle[type_of_questions][key]
+                            except KeyError:
+                                pass
+
+                            try:
+                                del gold_dict_per_type_of_questions_start[type_of_questions][key]
+                            except KeyError:
+                                pass
+
+                            try:
+                                del pred_dict_per_type_of_questions_start[type_of_questions][key]
+                            except KeyError:
+                                pass
+
+                        #print("type_of_questions: ",type_of_questions)
+                        #sub_index = value["question"].lower().find(type_of_questions)
+                        #print("sub_index: ", sub_index)
+                        #print("len(value['question']) - len(type_of_questions) - 2: ", len(value["question"])-len(type_of_questions)-2)
+                        #start_string = len(value["question"])-len(type_of_questions)-6
+                        #end_string = len(value["question"])-1
+                        #print("extract at the end: ", value["question"][start_string:end_string])
                     else:
-                        print("MIDDLE")
+                        #print("MIDDLE")
+                        if type_of_questions != "":
+                            try:
+                                del gold_dict_per_type_of_questions_start[type_of_questions][key]
+                            except KeyError:
+                                pass
+
+                            try:
+                                del pred_dict_per_type_of_questions_start[type_of_questions][key]
+                            except KeyError:
+                                pass
+
+                            try:
+                                del gold_dict_per_type_of_questions_end[type_of_questions][key]
+                            except KeyError:
+                                pass
+
+                            try:
+                                del pred_dict_per_type_of_questions_end[type_of_questions][key]
+                            except KeyError:
+                                pass
+                            pass
+
             """
             if  type_of_questions != "":
                 gold_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in gold_dict.items() if (key in audit_trail_from_question_type[type_of_questions] \
-                                                                        and (value["question"].lower().find(type_of_questions) <= 1)) }
+                                                                        and (value["question"].lower().find(type_of_questions) <= 1) \
+                                                                        and key in pred_dict_per_type_of_questions[type_of_questions]) }
+            """
 
+            """
+                for key in gold_dict_per_type_of_questions_start[type_of_questions].keys():
+                    print("key:: ", key )
+                    print("type(key):: ", type(key) )
+                            print("pred_dict[,key,] : ", pred_dict[key])
+                print("@@@@@@@@@@@@@@@@@@@@@@@@")
+                
+                pred_dict_per_type_of_questions_start[type_of_questions] = {key: pred_dict[key] for key in gold_dict_per_type_of_questions_start[type_of_questions].keys()}
 
-
-                pred_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in pred_dict.items() if key in list(gold_dict_per_type_of_questions_start[type_of_questions].keys()) }
+                #pred_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in pred_dict.items() if key in list(gold_dict_per_type_of_questions_start[type_of_questions].keys()) }
 
                 # Create two dictionnaries for each type of sentence based at the end of the sentence
-                gold_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in gold_dict.items() if key in audit_trail_from_question_type[type_of_questions] \
-                                                                        and value["question"].lower().find(type_of_questions) >= len(value["question"])-len(type_of_questions)-5 }
+                gold_dict_per_type_of_questions_end[type_of_questions] = {key: value for key, value in gold_dict.items() if key in audit_trail_from_question_type[type_of_questions] \
+                                                                        and value["question"].lower().find(type_of_questions) >= len(value["question"])-len(type_of_questions)-2 \
+                                                                        and key in pred_dict_per_type_of_questions[type_of_questions]}
 
 
-                pred_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in pred_dict.items() if key in list(gold_dict_per_type_of_questions_start[type_of_questions].keys()) }
+                pred_dict_per_type_of_questions_end[type_of_questions] = {key: pred_dict[key] for key in list(gold_dict_per_type_of_questions_end[type_of_questions].keys())}
 
+                #print("*"*80)
                 # Create two dictionnaries for each type of sentence based at the middle of the sentencecount_questions_type
-                gold_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in gold_dict.items() if key not in list(gold_dict_per_type_of_questions_start[type_of_questions].keys()) \
+                gold_dict_per_type_of_questions_middle[type_of_questions] = {key: value for key, value in gold_dict.items() if key not in list(gold_dict_per_type_of_questions_start[type_of_questions].keys()) \
                                                                             and key not in list(gold_dict_per_type_of_questions_end[type_of_questions].keys())}
 
-                pred_dict_per_type_of_questions_start[type_of_questions] = {key: value for key, value in pred_dict.items() if key not in list(gold_dict_per_type_of_questions_start[type_of_questions].keys()) \
-                                                                            and key not in list(gold_dict_per_type_of_questions_end[type_of_questions].keys())}
-
-        """"
-        # draw a pie chart
-        # Data to plot
-        #labels = 'Python', 'C++', 'Ruby', 'Java'
-        types_of_questions[types_of_questions.index('')] = 'Question without interrogative pronoun'
-
-        labels = tuple(types_of_questions)
-        #sizes = [215, 130, 245, 210]
-        sizes = [count_questions_type[type_of_questions] for type_of_questions in labels]
-
-
-        #colors = ['gold', 'yellowgreen', 'lightcoral', 'lightskyblue']
-
-        colors = cm.Set1(np.arange(40) / 40.)
-        explode = (0, 0, 0, 0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0)  # explode 1st slice
-        cmap = get_cmap(len(sizes))
-        # Plot
-        fig1, ax1 = plt.subplots()
-        ax1.pie(sizes, colors=colors, labels=labels, autopct='%1.1f%%', startangle=90)  # draw circle
-        centre_circle = plt.Circle((0, 0), 0.70, fc='white')
-        fig = plt.gcf()
-        fig.gca().add_artist(centre_circle)  # Equal aspect ratio ensures that pie is drawn as a circle
-        #plt.pie(sizes, explode=explode, labels=labels, colors=colors_cs,
-        #        autopct='%1.1f%%', shadow=True, startangle=140)
-        patches, texts = plt.pie(sizes,  shadow=True, startangle=90)
-        plt.legend(patches, labels, loc="best")
-        plt.axis('equal')
-        plt.tight_layout()
-        plt.show()
-
-        # Pie chart
-        #labels = ['Frogs', 'Hogs', 'Dogs', 'Logs']
-        #sizes = [15, 30, 45, 10]  # colors
-        #colors = ['#ff9999', '#66b3ff', '#99ff99', '#ffcc99']
-
-        #fig1, ax1 = plt.subplots()
-        #ax1.pie(sizes, colors=colors, labels=labels, autopct='%1.1f%%', startangle=90)  # draw circle
-        #centre_circle = plt.Circle((0, 0), 0.70, fc='white')
-        #fig = plt.gcf()
-        #fig.gca().add_artist(centre_circle)  # Equal aspect ratio ensures that pie is drawn as a circle
-        #ax1.axis('equal')
-        #plt.tight_layout()
-        #plt.show()
+                pred_dict_per_type_of_questions_middle[type_of_questions] = {key: pred_dict[key] for key in list(gold_dict_per_type_of_questions_end[type_of_questions].keys())}
+            else:
+                gold_dict_per_type_of_questions_start[""] = gold_dict_per_type_of_questions[""]
+                pred_dict_per_type_of_questions_start[""] = pred_dict_per_type_of_questions[""]
+                gold_dict_per_type_of_questions_end[""] = gold_dict_per_type_of_questions[""]
+                pred_dict_per_type_of_questions_end[""] = pred_dict_per_type_of_questions[""]
+                gold_dict_per_type_of_questions_middle[""] = gold_dict_per_type_of_questions[""]
+                pred_dict_per_type_of_questions_middle[""] = pred_dict_per_type_of_questions[""]
         """
+
         positions_in_question = ["beginning", "middle", "end"]
 
-        F1 = np.array([[0, 0, 0, 0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0],
-                            [0, 0, 0, 0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0],
-                            [0, 0, 0, 0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0]])
+        print(type_of_questions," F1 score: ", util.eval_dicts(gold_dict_per_type_of_questions[type_of_questions], pred_dict_per_type_of_questions[type_of_questions], args.use_squad_v2)['F1'])
+
+        list_beginning = [util.eval_dicts(gold_dict_per_type_of_questions_start[type_of_questions], pred_dict_per_type_of_questions_start[type_of_questions], args.use_squad_v2)['F1']  for type_of_questions in types_of_questions]
+        list_middle = [util.eval_dicts(gold_dict_per_type_of_questions_middle[type_of_questions], pred_dict_per_type_of_questions_middle[type_of_questions], args.use_squad_v2)['F1']  for type_of_questions in types_of_questions]
+        list_end = [util.eval_dicts(gold_dict_per_type_of_questions_end[type_of_questions], pred_dict_per_type_of_questions_end[type_of_questions], args.use_squad_v2)['F1']  for type_of_questions in types_of_questions]
+
+        #for type_of_questions in types_of_questions:
+        #    print("gold_dict_per_type_of_questions_start[type_of_questions]: ",gold_dict_per_type_of_questions_start[type_of_questions])
+        #    print("pred_dict_per_type_of_questions[type_of_questions]: ",pred_dict_per_type_of_questions[type_of_questions])
+
+        F1 = np.array([list_beginning,
+                        list_middle,
+                        list_end])
+
+
+        #F1 = np.array([[0, 0, 0, 0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0],
+        #                    [0, 0, 0, 0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0],
+        #                    [0, 0, 0, 0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0]])
 
         fig, ax = plt.subplots()
 
