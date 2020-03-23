@@ -384,8 +384,16 @@ def main(args, actions = None):
                             first_zero_value = length_index_batch
 
                         if first_zero_value > 2:
+                            print("debug:", i)
+                            print("> size before amendment of cw_idxs", cw_idxs.size())
+                            print(cw_idxs[i])
                             select_item_idx_1 = random.randint(0, first_zero_value - 1)
+                            #print("section 1 :", cw_idxs[i, 0:select_item_idx_1)
+                            #print("remove:", cw_idxs[i,0:select_item_idx_1)
+                            #print("section 2 :", cw_idxs[i, 0:select_item_idx_1)
                             cw_idxs[i, :] = torch.cat((cw_idxs[i,0:select_item_idx_1], cw_idxs[i,select_item_idx_1+1:],torch.tensor([0])), -1)
+                            print("> size before amendment of cw_idxs", cw_idxs.size())
+                            print(cw_idxs[i])
 
             elif actions[0] == "add":
                 batch_size = cw_idxs.size()[0]
@@ -511,7 +519,7 @@ def main(args, actions = None):
     return results['F1']
 if __name__ == '__main__':
 
-    max_steps = 20
+    max_steps = 2
 
     substitute_F1_values = []
     add_F1_values = []
@@ -519,7 +527,7 @@ if __name__ == '__main__':
 
 
     for nb in range(0,max_steps):
-        proposed_actions = ('add', nb)
+        proposed_actions = ('delete', nb)
         delete_F1_values.append(main(get_test_args(), actions = proposed_actions))
 
     #
