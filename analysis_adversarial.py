@@ -453,7 +453,7 @@ def main(args, actions = None):
                             #save_value_1 = copy.deepcopy(cw_idxs[i, select_item_idx_1])
 
                             #cw_idxs[i, select_item_idx_1] = random.randint(1, 50000)
-                            cw_idxs[i, :] =  torch.cat((cw_idxs[i,0:select_item_idx_1], cw_idxs[i,select_item_idx_1+1:],torch.tensor([0])), 1)
+                            cw_idxs[i, :] = torch.cat((cw_idxs[i,0:select_item_idx_1], cw_idxs[i,select_item_idx_1+1:],torch.tensor([0])), -1)
                             #new_tensor[:] = torch.cat((tensor[0:2], tensor[3:],torch.tensor([0])), 0)
 
                             # cw_idxs[i, select_item_idx_2] = save_value_1
@@ -662,9 +662,9 @@ if __name__ == '__main__':
 
 
     #
-    # for nb in range(0,max_steps):
-    #     proposed_actions = ('delete', nb)
-    #     delete_F1_values.append(main(get_test_args(), actions = proposed_actions))
+    for nb in range(0,max_steps):
+        proposed_actions = ('delete', nb)
+        delete_F1_values.append(main(get_test_args(), actions = proposed_actions))
 
     #
     #
