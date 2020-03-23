@@ -425,8 +425,8 @@ def main(args, actions = None):
                 number_of_actions = actions[1]
                 for _ in range(number_of_actions):
                     length_index_batch = cw_idxs.size()[1]
-                    print("cw_idxs.size() prior to making changes:", cw_idxs.size())
-                    for i in range(0, batch_size-1):
+                    #print("cw_idxs.size()[1] :", cw_idxs.size()[1])
+                    for i in range(batch_size):
                         tensor_with_zero_value = ((cw_idxs[i] == 0).nonzero()).squeeze()
                         #print("value: ", cw_idxs[i])
                         #print(">>>", tensor_with_zero_value)
@@ -439,23 +439,28 @@ def main(args, actions = None):
                         except:
                             first_zero_value = length_index_batch
 
+
+
                         #if tensor_with_zero_value ==
                         #    (torch.min(tensor_with_zero_value))
                         #print("tensor: ", cw_idxs[i])
                         #print("item number: ", i,  " index of first zero value: ", ((cw_idxs[i] == 0).nonzero()).squeeze()[1])
                         if first_zero_value > 2:
-                            print("i :", i)
-                            print("cw_idxs[1] after to making changes:", cw_idxs)
-                            select_item_idx_1 = random.randint(0, first_zero_value-1)
-                            for delete_idx in range (select_item_idx_1, first_zero_value-2):
-                                cw_idxs[i, delete_idx] = save_value_1 = copy.deepcopy(cw_idxs[i, delete_idx+1])
-                            cw_idxs[i, first_zero_value-1] = 0
+                            select_item_idx_1 = random.randint(0, first_zero_value - 1)
+                            #select_item_idx_2 = random.randint(0, first_zero_value-1)
+                            #print("select_item_idx_1 before switch", select_item_idx_1, " value: ", cw_idxs[i, select_item_idx_1])
+                            #print("select_item_idx_2  before switch", select_item_idx_2, " value: ", cw_idxs[i, select_item_idx_2])
+                            #save_value_1 = copy.deepcopy(cw_idxs[i, select_item_idx_1])
+
+                            #cw_idxs[i, select_item_idx_1] = random.randint(1, 50000)
+                            cw_idxs[i, :] =  torch.cat((cw_idxs[i,0:select_item_idx_1], cw_idxs[i,select_item_idx_1+1:],torch.tensor([0])), 1)
+                            #new_tensor[:] = torch.cat((tensor[0:2], tensor[3:],torch.tensor([0])), 0)
+
+                            # cw_idxs[i, select_item_idx_2] = save_value_1
                             #print("select_item_idx_1 after switch", select_item_idx_1, " value: ", cw_idxs[i, select_item_idx_1])
                             #print("select_item_idx_2  after switch", select_item_idx_2, " value: ", cw_idxs[i, select_item_idx_2])
                             #print("tensor: ", cw_idxs[i])
-                            print("cw_idxs[1] after to making changes:", cw_idxs)
-                            #exit()
-                print("cw_idxs.size() after  making changes:", cw_idxs.size())
+
                     # print("length of question in batch :", length_index_batch)
                     # for batch in cw_idxs.size()[0]:
                     #    select_item_idx_1 = randint(0, length_index_batch-1)
@@ -466,7 +471,99 @@ def main(args, actions = None):
 
 
             elif actions[0] == "add":
-                pass
+                # substitute to random token in each question of the batch (substitution is made within the same sentence:
+                # print("batch size: ", cw_idxs.size()[0])
+                batch_size = cw_idxs.size()[0]
+                number_of_actions = actions[1]
+                for _ in range(number_of_actions):
+                    length_index_batch = cw_idxs.size()[1]
+                    #print("cw_idxs.size()[1] :", cw_idxs.size()[1])
+                    for i in range(batch_size):
+                        tensor_with_zero_value = ((cw_idxs[i] == 0).nonzero()).squeeze()
+                        #print("value: ", cw_idxs[i])
+                        #print(">>>", tensor_with_zero_value)
+                        #print("torch.min(tensor_with_zero_value)): ",torch.min(tensor_with_zero_value))
+                        #print("shape: ", tensor_with_zero_value.size())
+                        #print("torch.min(tensor_with_zero_value)).item(): ", torch.min(tensor_with_zero_value)).item()
+
+                        try:
+                            first_zero_value = torch.min(tensor_with_zero_value)
+                        except:
+                            first_zero_value = length_index_batch
+
+
+
+                        #if tensor_with_zero_value ==
+                        #    (torch.min(tensor_with_zero_value))
+                        #print("tensor: ", cw_idxs[i])
+                        #print("item number: ", i,  " index of first zero value: ", ((cw_idxs[i] == 0).nonzero()).squeeze()[1])
+                        if first_zero_value > 2:
+                            select_item_idx_1 = random.randint(0, first_zero_value - 1)
+                            #select_item_idx_2 = random.randint(0, first_zero_value-1)
+                            #print("select_item_idx_1 before switch", select_item_idx_1, " value: ", cw_idxs[i, select_item_idx_1])
+                            #print("select_item_idx_2  before switch", select_item_idx_2, " value: ", cw_idxs[i, select_item_idx_2])
+                            #save_value_1 = copy.deepcopy(cw_idxs[i, select_item_idx_1])
+                            cw_idxs[i, select_item_idx_1] = random.randint(1, 50000)
+                            # cw_idxs[i, select_item_idx_2] = save_value_1
+                            #print("select_item_idx_1 after switch", select_item_idx_1, " value: ", cw_idxs[i, select_item_idx_1])
+                            #print("select_item_idx_2  after switch", select_item_idx_2, " value: ", cw_idxs[i, select_item_idx_2])
+                            #print("tensor: ", cw_idxs[i])
+
+                    # print("length of question in batch :", length_index_batch)
+                    # for batch in cw_idxs.size()[0]:
+                    #    select_item_idx_1 = randint(0, length_index_batch-1)
+                    #    select_item_idx_2 = randint(0, length_index_batch-1)
+                        #print("select_item_idx_1", select_item_idx_1)
+                        #print("select_item_idx_2", select_item_idx_2)
+
+            elif actions[0] == "add2":
+                # substitute to random token in each question of the batch (substitution is made within the same sentence:
+                # print("batch size: ", cw_idxs.size()[0])
+                batch_size = cw_idxs.size()[0]
+                number_of_actions = actions[1]
+                for _ in range(number_of_actions):
+                    length_index_batch = cw_idxs.size()[1]
+                    # print("cw_idxs.size()[1] :", cw_idxs.size()[1])
+                    for i in range(batch_size):
+                        tensor_with_zero_value = ((cw_idxs[i] == 0).nonzero()).squeeze()
+                        # print("value: ", cw_idxs[i])
+                        # print(">>>", tensor_with_zero_value)
+                        # print("torch.min(tensor_with_zero_value)): ",torch.min(tensor_with_zero_value))
+                        # print("shape: ", tensor_with_zero_value.size())
+                        # print("torch.min(tensor_with_zero_value)).item(): ", torch.min(tensor_with_zero_value)).item()
+
+                        try:
+                            first_zero_value = torch.min(tensor_with_zero_value)
+                        except:
+                            first_zero_value = length_index_batch
+
+                        # if tensor_with_zero_value ==
+                        #    (torch.min(tensor_with_zero_value))
+                        # print("tensor: ", cw_idxs[i])
+                        # print("item number: ", i,  " index of first zero value: ", ((cw_idxs[i] == 0).nonzero()).squeeze()[1])
+                        if first_zero_value > 2:
+                            select_item_idx_1 = random.randint(0, first_zero_value - 1)
+                            select_item_idx_2 = random.randint(0, first_zero_value - 1)
+                            # select_item_idx_2 = random.randint(0, first_zero_value-1)
+                            # print("select_item_idx_1 before switch", select_item_idx_1, " value: ", cw_idxs[i, select_item_idx_1])
+                            # print("select_item_idx_2  before switch", select_item_idx_2, " value: ", cw_idxs[i, select_item_idx_2])
+                            # save_value_1 = copy.deepcopy(cw_idxs[i, select_item_idx_1])
+                            cw_idxs[i, select_item_idx_1] = random.randint(1, 50000)
+                            cw_idxs[i, select_item_idx_2] = random.randint(1, 50000)
+                            # cw_idxs[i, select_item_idx_2] = save_value_1
+                            # print("select_item_idx_1 after switch", select_item_idx_1, " value: ", cw_idxs[i, select_item_idx_1])
+                            # print("select_item_idx_2  after switch", select_item_idx_2, " value: ", cw_idxs[i, select_item_idx_2])
+                            # print("tensor: ", cw_idxs[i])
+
+                    # print("length of question in batch :", length_index_batch)
+                    # for batch in cw_idxs.size()[0]:
+                    #    select_item_idx_1 = randint(0, length_index_batch-1)
+                    #    select_item_idx_2 = randint(0, length_index_batch-1)
+                    # print("select_item_idx_1", select_item_idx_1)
+                    # print("select_item_idx_2", select_item_idx_2)
+
+
+
             else:
                 print("Incorrect command: exiting")
                 exit()
@@ -553,73 +650,69 @@ def main(args, actions = None):
     return results['F1']
 if __name__ == '__main__':
 
-    max_steps = 10
+    #proposed_actions = ('add', 1)
+    #print("result for ", proposed_actions[0], ": ", main(get_test_args(), actions = proposed_actions))
+
+
+    max_steps = 20
 
     substitute_F1_values = []
     add_F1_values = []
     delete_F1_values = []
 
-    for nb in range(0,max_steps):
-        proposed_actions = ('substitute', nb)
-        substitute_F1_values.append(main(get_test_args(), actions = proposed_actions))
 
-        #proposed_actions = ('delete', nb)
-        #delete_F1_values.append(main(get_test_args(), actions = proposed_actions))
+    #
+    # for nb in range(0,max_steps):
+    #     proposed_actions = ('delete', nb)
+    #     delete_F1_values.append(main(get_test_args(), actions = proposed_actions))
 
-        #proposed_actions = ('add', nb)
-        #add_F1_values.append(main(get_test_args(), actions=proposed_actions))
-
-    #print("result for ",proposed_actions[0], ": ", substitute_F1_values)
-
+    #
+    #
+    #
+    #     #proposed_actions = ('delete', nb)
+    #     #delete_F1_values.append(main(get_test_args(), actions = proposed_actions))
+    #
+    # print("Computing add2")
+    # for nb in range(0, max_steps):
+    #     proposed_actions = ('add2', nb)
+    #     add_F1_values.append(main(get_test_args(), actions=proposed_actions))
+    #     print(">>>", nb, " : ", add_F1_values)
+    # print("add OK")
+    # print("result for ",proposed_actions[0], ": ", substitute_F1_values)
+    #
+    max_steps = 20
     x = np.linspace(0, max_steps, max_steps )
-    add_F1_values = np.zeros(max_steps)
+    # substitute_F1_values = [68.33486323626532, 67.71919483508022, 67.08127587293258, 66.42602368678533, 65.6553721649929, 65.23549199487181, 64.14933543655921, 64.0103589720414, 63.303466448581716, 62.618198893603875]
+    substitute_F1_values = [68.33486323626532, 67.23285228638218, 66.73308354531125, 66.14306850142398, 65.54881628728191, 65.33088188555581,
+     64.13253393487105, 63.578903655839724, 63.27890305924118, 62.8772705882559, 62.54967576285084, 62.2195203002712,
+     61.49383994536334, 61.31659100527948, 60.49810802197565, 58.83797719121586, 59.1433537536782, 58.24023034655501,
+     58.04349629609232, 58.00730678396045]
+
+    add_F1_values = [68.33486323626532, 67.98018113756014, 67.54894054587062, 67.58598247051836, 66.9322413680687, 67.0811889078869,
+     66.9425174656538, 66.57131296474456, 66.62162059512168, 66.21431805860604, 65.75180147983815, 65.38114705135808,
+     65.28818677866228, 65.26705644496026, 64.50154623612728, 64.65359901744826, 64.51610661460624, 63.90690425608921,
+     64.02092710461305, 64.1271014387607]
+
+    add2_F1_values = [68.33486323626532, 67.54839065720493, 67.09879099264052, 66.81830361853085, 66.1604872901321, 65.21080053247125,
+     64.80447065879143, 64.7936578323173, 64.7998150308031, 64.54904675195431, 64.01599496348219, 63.805717083336326,
+     62.9345214996013, 62.32016947001721, 61.49306358215139, 61.47981575321356, 61.1429887294174, 61.582206379069255,
+     61.05709145281228, 60.66102968134862]
+
     delete_F1_values = np.zeros(max_steps)
     # Initialise the figure and axes.
     fig, ax = plt.subplots(1, figsize=(8, 6))
 
     # Set the title for the figure
-    fig.suptitle('Influence of adversarial attacks on F1 score', fontsize=15)
+    #fig.suptitle('Influence of adversarial attacks on F1 score', fontsize=15)
 
     # Draw all the lines in the same plot, assigning a label for each one to be
     # shown in the legend.
-    ax.plot(x, substitute_F1_values, color="red", label="substitute", marker='*')
-    ax.plot(x, add_F1_values, color="green", label="add", marker='o')
-    ax.plot(x, delete_F1_values, color="blue", label="delete", marker='x')
+    ax.plot(x, substitute_F1_values, color="red", label="substitute two values", marker='*')
+    ax.plot(x, add_F1_values, color="green", label="add one value", marker='o')
+    ax.plot(x, add2_F1_values, color="blue", label="add 2 values at each step", marker='+')
+    # ax.plot(x, delete_F1_values, color="pink", label="delete", marker='x')
 
     # Add a legend, and position it on the lower right (with no box)
-    plt.legend(loc="lower right", frameon=True)
+    plt.legend(loc="lower left", frameon=True)
 
     plt.show()
-
-# ......,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-# .....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-# .....,,,,,,,,,,,,,,,,,,,,,,,,,,,,*##&#(#%%#%%##%(*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-# ......,,,,,,,,,,,,,,,,,,,,,,,,,*#&&&%&@&&@&@%&&%%&#&%%*,,,,,,,,,,,,,,,,,,,,,,,,,
-# .......,,,,,,,,,,,,,,,,,,,,,(%&&&&(((((((#(###%%&%#&%&&&(*,,,,,,,,,,,,,,,,,,,,,,
-# ........,,,,,,,,,,,,,,,,,.(%%&&/////(/((((((((((####%@@@%%(,,,,,,,,,,,,,,,,,,,,,
-# ...........,,,,,,,,,,,,,,##%%(/////////(((((((((#######&&#%%,,,,,,,,,,,,,,,,,,,,
-# ............,,,,,,,,,,,,,*##(//////////(((((((((#######%&#(##*,,,,,,,,,,,,,,,,,,
-# ..............,,,,,,,,,,*(#(//////////(((((((((#(#######%##(/,,,,,,,,,,,,,,,,,,,
-# .............,,.,.,,,,,.,/((//////((//(((/(((###%######%%#(((,,,,,,,,,,,,,,,,,,,
-# ,,,,,,,,,,,,,,,,,,,,,,,,,*#/%&%&%&%%##(((###%%%%&&&&%###%##(#,,,,,,,,,,,,,,,,,,,
-# ,,,,,,,,,,,,,,,,,,,,,,,,,*((#(%(#%&#%(//(#%%&&&%&%%&%%###%%#,,,,,,,,,,,,,,,,,,,,
-# ,,.,,,,,,,,,,,,,,,,,,,,,,(/(##((&####((/(####%%%%#%#%%##(&%##,,,,,,,,,,,,,,,,,,,
-# ,,,,,,,,,,,,,,,,,,,,,,,,,#////(//(///(/((################&(##,,,,,,,,,,,,,,,,,,,
-# ,,,,,,,,,,,,,,,,,,,,,,,,,#/////////#(/(((######(((###(###(###,,,,,,,,,,,,,,,,,,,
-# ,,,,,,,,,,,,,,,,,,,,,,,,,,/(////(%%(#(######%#####(#######%#,,,,,,,,,,,,,,,,,,,,
-# ,.,,,,,,,,,,,,,,,,,,,,,,,,(/((((#(((((#####%#####(#########,,,,,,,,,,,,,,,,,,,,,
-# ,,,,.,,,,,,,,,,,,,,,,,,,,,,((((((#(((##(#%##############%#,,,,,,,,,,,,,,,,,,,,,,
-# ,.,,,,,,,,,,,,,,,,,,,,,,,,,/((((((((#(###%%%%###(######.,,,,,,,,,,,,,,,,,,,,,,,,
-# ,,,,,,,,,,,,,,,,,,,,,,,,,,.,((((((((##%%%%############,,,,,,,,,,,,,,,,,,,,,,,,,,
-# ,,,,,,,,,,,,,,,,,,,,,,,,...../(((((/((((((###########%.,,,,,,,,,,,,,,,,,,,,,,,,,
-# ,,,,,,,,,,,,,,,,,,,,,,......(@((%%(##########%%%%#%#%&#.,,,,,,,,,,,,,,,,,,,,,,,,
-# ,,,,,,,,,,,,,,,,,,,,,,..(#*(%@(((((%##%%%%%%%%%####%%(#(,.,.,,,,,,,,,,,,,,,,,,,,
-# ..,,,,,,,,,,./#*/(#,/#&(%(,#%@&(((((###%%#%#####%#@%%#####(%.,,,..,,,,,,,,,,,,,,
-# .,.,,,*(/,#**&&*&&*#&((&(/(#%&&%(/(((#####%#####&@&##%###%###(#*#.,,,,,,,,,,,,,,
-# .,./#,//(&&#,.*./(,#%*,*(%@%#&%%%%//(((((((((#&&(#%*##(##/##(%/(#(#(//,,,,,,,,,,
-# ./#./%#/*/%*/(#&#&#&((#&@@&@@((%%%#(/((((/(%%%#%%@@@@@##&&/&//%#/(&/#%%&#(#,,,,,
-# /#(*/%##%%#,#///*,,(%,..*(#(((&,(%%##(((/#&(%#@(&#(@#@&#@(%##/%(/(%%%/(%#(((%/(,
-# *#,/*,.&*(#%,/@/.,,...(*#%&##%/,@(%%&%(%&/@@#(%&(/@((@/(##*/@//(%#*(%(/(%/%/#((#
-# (,(((#,,%,#&%.//%(*#//((%%///(%(#(##((#/@#/%&/#&/%%/%#*##((&%//#((#(/(%**/&,/((#
-# **/#*&%,#*,*#,,,/(##(*/%##/*,.,/&#&((//#%&#*%&**&#,(%%//%(*#&(*&(,#&,*&,,(#*(#%(
-# /(.#,#(#%,./%%.,./#*,./%%((/*/(&*%/(/(%/*#*/#((#%(,(&,*@,,##/((%*,#%/*%&*/%.@%*&
