@@ -275,11 +275,6 @@ def main(args, actions = None):
     with open(eval_file, 'r') as fh:
         gold_dict = json_load(fh)
 
-    # create statistics
-    # print("*"*80)
-    # print(len(gold_dict))
-    # print(gold_dict['1']['question'])
-
     count_questions_type = defaultdict(lambda: 0)
 
     audit_trail_from_question_type = defaultdict(lambda: [])
@@ -305,8 +300,6 @@ def main(args, actions = None):
 
         # defining variable for the first and second word
         combined_first_and_second_words = first_word_question_lower_case + " " + second_word_question_lower_case
-
-        # printing on the screen test for debugging purpose
 
         # Analyzing the sentence
         if first_word_question_lower_case in list_of_interrogative_pronouns:
@@ -338,29 +331,12 @@ def main(args, actions = None):
 
         else:
             pronoun = find_first_interrogative_pronoun(list_of_interrogative_pronouns, question_lower_case)
-            # if pronoun =="":
-            #    print(">>", question_lower_case)
-            #    print("@@@", gold_dict[str(index)]['question'])
             count_questions_type[pronoun] += 1
             audit_trail_from_question_type[pronoun].append(str(index))
-            # if pronoun =="":
-            #    print(">>", question_lower_case.split())
-            # print()
-            # if first_word_question_lower_case == "if":
-            #    print(">>", question_lower_case.split())
-
-    # print(count_questions_type)
-    # if gold_dict[str(index)]['question'].lower().split()[0] == "in":
-    #    print(gold_dict[str(index)]['question'])
 
     reverse_dict_by_value = OrderedDict(sorted(count_questions_type.items(), key=lambda x: x[1]))
-    # print(count_questions_type)
     total_questions = sum(count_questions_type.values())
-    # print(reverse_dict)
-    # for k, v in reverse_dict_by_value.items():
-    #   print( "%s: %s and in percentage: %s" % (k, v, 100*v/total_questions))
-    # print(audit_trail_from_question_type)
-    # exit()
+
     with torch.no_grad(), \
          tqdm(total=len(dataset)) as progress_bar:
         for cw_idxs, cc_idxs, qw_idxs, qc_idxs, cw_pos, cw_ner, cw_freq, cqw_extra, y1, y2, ids in data_loader:
@@ -374,195 +350,80 @@ def main(args, actions = None):
 
             if actions[0] == "substitute":
                 # substitute to random token in each question of the batch (substitution is made within the same sentence:
-                # print("batch size: ", cw_idxs.size()[0])
                 batch_size = cw_idxs.size()[0]
                 number_of_actions = actions[1]
                 for _ in range(number_of_actions):
                     length_index_batch = cw_idxs.size()[1]
-                    #print("cw_idxs.size()[1] :", cw_idxs.size()[1])
                     for i in range(batch_size):
                         tensor_with_zero_value = ((cw_idxs[i] == 0).nonzero()).squeeze()
-                        #print("value: ", cw_idxs[i])
-                        #print(">>>", tensor_with_zero_value)
-                        #print("torch.min(tensor_with_zero_value)): ",torch.min(tensor_with_zero_value))
-                        #print("shape: ", tensor_with_zero_value.size())
-                        #print("torch.min(tensor_with_zero_value)).item(): ", torch.min(tensor_with_zero_value)).item()
 
                         try:
                             first_zero_value = torch.min(tensor_with_zero_value)
                         except:
                             first_zero_value = length_index_batch
 
-
-
-                        #if tensor_with_zero_value ==
-                        #    (torch.min(tensor_with_zero_value))
-                        #print("tensor: ", cw_idxs[i])
-                        #print("item number: ", i,  " index of first zero value: ", ((cw_idxs[i] == 0).nonzero()).squeeze()[1])
                         if first_zero_value > 2:
                             select_item_idx_1 = random.randint(0, first_zero_value-1)
                             select_item_idx_2 = random.randint(0, first_zero_value-1)
-                            #print("select_item_idx_1 before switch", select_item_idx_1, " value: ", cw_idxs[i, select_item_idx_1])
-                            #print("select_item_idx_2  before switch", select_item_idx_2, " value: ", cw_idxs[i, select_item_idx_2])
                             save_value_1 = copy.deepcopy(cw_idxs[i, select_item_idx_1])
                             cw_idxs[i, select_item_idx_1] = cw_idxs[i, select_item_idx_2]
                             cw_idxs[i, select_item_idx_2] = save_value_1
-                            #print("select_item_idx_1 after switch", select_item_idx_1, " value: ", cw_idxs[i, select_item_idx_1])
-                            #print("select_item_idx_2  after switch", select_item_idx_2, " value: ", cw_idxs[i, select_item_idx_2])
-                            #print("tensor: ", cw_idxs[i])
-
-                    # print("length of question in batch :", length_index_batch)
-                    # for batch in cw_idxs.size()[0]:
-                    #    select_item_idx_1 = randint(0, length_index_batch-1)
-                    #    select_item_idx_2 = randint(0, length_index_batch-1)
-                        #print("select_item_idx_1", select_item_idx_1)
-                        #print("select_item_idx_2", select_item_idx_2)
 
             elif actions[0] == "delete":
                 # substitute to random token in each question of the batch (substitution is made within the same sentence:
-                # print("batch size: ", cw_idxs.size()[0])
                 batch_size = cw_idxs.size()[0]
                 number_of_actions = actions[1]
                 for _ in range(number_of_actions):
                     length_index_batch = cw_idxs.size()[1]
-                    #print("cw_idxs.size()[1] :", cw_idxs.size()[1])
                     for i in range(batch_size):
                         tensor_with_zero_value = ((cw_idxs[i] == 0).nonzero()).squeeze()
-                        #print("value: ", cw_idxs[i])
-                        #print(">>>", tensor_with_zero_value)
-                        #print("torch.min(tensor_with_zero_value)): ",torch.min(tensor_with_zero_value))
-                        #print("shape: ", tensor_with_zero_value.size())
-                        #print("torch.min(tensor_with_zero_value)).item(): ", torch.min(tensor_with_zero_value)).item()
 
                         try:
                             first_zero_value = torch.min(tensor_with_zero_value)
                         except:
                             first_zero_value = length_index_batch
 
-
-
-                        #if tensor_with_zero_value ==
-                        #    (torch.min(tensor_with_zero_value))
-                        #print("tensor: ", cw_idxs[i])
-                        #print("item number: ", i,  " index of first zero value: ", ((cw_idxs[i] == 0).nonzero()).squeeze()[1])
                         if first_zero_value > 2:
                             select_item_idx_1 = random.randint(0, first_zero_value - 1)
-                            #select_item_idx_2 = random.randint(0, first_zero_value-1)
-                            #print("select_item_idx_1 before switch", select_item_idx_1, " value: ", cw_idxs[i, select_item_idx_1])
-                            #print("select_item_idx_2  before switch", select_item_idx_2, " value: ", cw_idxs[i, select_item_idx_2])
-                            #save_value_1 = copy.deepcopy(cw_idxs[i, select_item_idx_1])
-
-                            #cw_idxs[i, select_item_idx_1] = random.randint(1, 50000)
                             cw_idxs[i, :] = torch.cat((cw_idxs[i,0:select_item_idx_1], cw_idxs[i,select_item_idx_1+1:],torch.tensor([0])), -1)
-                            #new_tensor[:] = torch.cat((tensor[0:2], tensor[3:],torch.tensor([0])), 0)
-
-                            # cw_idxs[i, select_item_idx_2] = save_value_1
-                            #print("select_item_idx_1 after switch", select_item_idx_1, " value: ", cw_idxs[i, select_item_idx_1])
-                            #print("select_item_idx_2  after switch", select_item_idx_2, " value: ", cw_idxs[i, select_item_idx_2])
-                            #print("tensor: ", cw_idxs[i])
-
-                    # print("length of question in batch :", length_index_batch)
-                    # for batch in cw_idxs.size()[0]:
-                    #    select_item_idx_1 = randint(0, length_index_batch-1)
-                    #    select_item_idx_2 = randint(0, length_index_batch-1)
-                        #print("select_item_idx_1", select_item_idx_1)
-                        #print("select_item_idx_2", select_item_idx_2)
-
-
 
             elif actions[0] == "add":
-                # substitute to random token in each question of the batch (substitution is made within the same sentence:
-                # print("batch size: ", cw_idxs.size()[0])
                 batch_size = cw_idxs.size()[0]
                 number_of_actions = actions[1]
                 for _ in range(number_of_actions):
                     length_index_batch = cw_idxs.size()[1]
-                    #print("cw_idxs.size()[1] :", cw_idxs.size()[1])
                     for i in range(batch_size):
                         tensor_with_zero_value = ((cw_idxs[i] == 0).nonzero()).squeeze()
-                        #print("value: ", cw_idxs[i])
-                        #print(">>>", tensor_with_zero_value)
-                        #print("torch.min(tensor_with_zero_value)): ",torch.min(tensor_with_zero_value))
-                        #print("shape: ", tensor_with_zero_value.size())
-                        #print("torch.min(tensor_with_zero_value)).item(): ", torch.min(tensor_with_zero_value)).item()
 
                         try:
                             first_zero_value = torch.min(tensor_with_zero_value)
                         except:
                             first_zero_value = length_index_batch
 
-
-
-                        #if tensor_with_zero_value ==
-                        #    (torch.min(tensor_with_zero_value))
-                        #print("tensor: ", cw_idxs[i])
-                        #print("item number: ", i,  " index of first zero value: ", ((cw_idxs[i] == 0).nonzero()).squeeze()[1])
                         if first_zero_value > 2:
                             select_item_idx_1 = random.randint(0, first_zero_value - 1)
-                            #select_item_idx_2 = random.randint(0, first_zero_value-1)
-                            #print("select_item_idx_1 before switch", select_item_idx_1, " value: ", cw_idxs[i, select_item_idx_1])
-                            #print("select_item_idx_2  before switch", select_item_idx_2, " value: ", cw_idxs[i, select_item_idx_2])
-                            #save_value_1 = copy.deepcopy(cw_idxs[i, select_item_idx_1])
                             cw_idxs[i, select_item_idx_1] = random.randint(1, 50000)
-                            # cw_idxs[i, select_item_idx_2] = save_value_1
-                            #print("select_item_idx_1 after switch", select_item_idx_1, " value: ", cw_idxs[i, select_item_idx_1])
-                            #print("select_item_idx_2  after switch", select_item_idx_2, " value: ", cw_idxs[i, select_item_idx_2])
-                            #print("tensor: ", cw_idxs[i])
 
-                    # print("length of question in batch :", length_index_batch)
-                    # for batch in cw_idxs.size()[0]:
-                    #    select_item_idx_1 = randint(0, length_index_batch-1)
-                    #    select_item_idx_2 = randint(0, length_index_batch-1)
-                        #print("select_item_idx_1", select_item_idx_1)
-                        #print("select_item_idx_2", select_item_idx_2)
 
             elif actions[0] == "add2":
                 # substitute to random token in each question of the batch (substitution is made within the same sentence:
-                # print("batch size: ", cw_idxs.size()[0])
                 batch_size = cw_idxs.size()[0]
                 number_of_actions = actions[1]
                 for _ in range(number_of_actions):
                     length_index_batch = cw_idxs.size()[1]
-                    # print("cw_idxs.size()[1] :", cw_idxs.size()[1])
                     for i in range(batch_size):
                         tensor_with_zero_value = ((cw_idxs[i] == 0).nonzero()).squeeze()
-                        # print("value: ", cw_idxs[i])
-                        # print(">>>", tensor_with_zero_value)
-                        # print("torch.min(tensor_with_zero_value)): ",torch.min(tensor_with_zero_value))
-                        # print("shape: ", tensor_with_zero_value.size())
-                        # print("torch.min(tensor_with_zero_value)).item(): ", torch.min(tensor_with_zero_value)).item()
 
                         try:
                             first_zero_value = torch.min(tensor_with_zero_value)
                         except:
                             first_zero_value = length_index_batch
 
-                        # if tensor_with_zero_value ==
-                        #    (torch.min(tensor_with_zero_value))
-                        # print("tensor: ", cw_idxs[i])
-                        # print("item number: ", i,  " index of first zero value: ", ((cw_idxs[i] == 0).nonzero()).squeeze()[1])
                         if first_zero_value > 2:
                             select_item_idx_1 = random.randint(0, first_zero_value - 1)
                             select_item_idx_2 = random.randint(0, first_zero_value - 1)
-                            # select_item_idx_2 = random.randint(0, first_zero_value-1)
-                            # print("select_item_idx_1 before switch", select_item_idx_1, " value: ", cw_idxs[i, select_item_idx_1])
-                            # print("select_item_idx_2  before switch", select_item_idx_2, " value: ", cw_idxs[i, select_item_idx_2])
-                            # save_value_1 = copy.deepcopy(cw_idxs[i, select_item_idx_1])
                             cw_idxs[i, select_item_idx_1] = random.randint(1, 50000)
                             cw_idxs[i, select_item_idx_2] = random.randint(1, 50000)
-                            # cw_idxs[i, select_item_idx_2] = save_value_1
-                            # print("select_item_idx_1 after switch", select_item_idx_1, " value: ", cw_idxs[i, select_item_idx_1])
-                            # print("select_item_idx_2  after switch", select_item_idx_2, " value: ", cw_idxs[i, select_item_idx_2])
-                            # print("tensor: ", cw_idxs[i])
-
-                    # print("length of question in batch :", length_index_batch)
-                    # for batch in cw_idxs.size()[0]:
-                    #    select_item_idx_1 = randint(0, length_index_batch-1)
-                    #    select_item_idx_2 = randint(0, length_index_batch-1)
-                    # print("select_item_idx_1", select_item_idx_1)
-                    # print("select_item_idx_2", select_item_idx_2)
-
-
 
             else:
                 print("Incorrect command: exiting")
@@ -650,10 +511,6 @@ def main(args, actions = None):
     return results['F1']
 if __name__ == '__main__':
 
-    #proposed_actions = ('add', 1)
-    #print("result for ", proposed_actions[0], ": ", main(get_test_args(), actions = proposed_actions))
-
-
     max_steps = 20
 
     substitute_F1_values = []
@@ -661,9 +518,8 @@ if __name__ == '__main__':
     delete_F1_values = []
 
 
-    #
     for nb in range(0,max_steps):
-        proposed_actions = ('delete', nb)
+        proposed_actions = ('add', nb)
         delete_F1_values.append(main(get_test_args(), actions = proposed_actions))
 
     #
